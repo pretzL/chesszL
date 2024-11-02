@@ -60,22 +60,31 @@ export class ChessEngine {
         if (toSquare.color === fromSquare.color) return false;
 
         const pieceType = this.getPieceType(fromSquare.piece);
-        const isWhite = fromSquare.color === "white";
+        if (!pieceType) return false;
+
+        const isValidPieceMove = this.isValidPieceMove(fromRow, fromCol, toRow, toCol, pieceType, fromSquare.color);
+        if (!isValidPieceMove) return false;
+
+        if (checkingCheck) return true;
+
+        return !this.wouldBeInCheck(fromRow, fromCol, toRow, toCol, currentPlayer);
+    }
+
+    isValidPieceMove(fromRow, fromCol, toRow, toCol, pieceType, color) {
         const rowDiff = toRow - fromRow;
         const colDiff = toCol - fromCol;
         const absRowDiff = Math.abs(rowDiff);
         const absColDiff = Math.abs(colDiff);
-
-        let isValid = false;
+        const isWhite = color === "white";
 
         switch (pieceType) {
             case "pawn": {
                 const direction = isWhite ? -1 : 1;
                 const startRow = isWhite ? 6 : 1;
 
-                // Regular move
-                if (colDiff === 0 && rowDiff === direction && !toSquare.piece) {
-                    isValid = true;
+                // Regular move forward
+                if (colDiff === 0 && rowDiff === direction && !this.board[toRow][toCol].piece) {
+                    return true;
                 }
 
                 // Initial two-square move
@@ -83,15 +92,15 @@ export class ChessEngine {
                     colDiff === 0 &&
                     fromRow === startRow &&
                     rowDiff === direction * 2 &&
-                    !toSquare.piece &&
+                    !this.board[toRow][toCol].piece &&
                     !this.board[fromRow + direction][fromCol].piece
                 ) {
-                    isValid = true;
+                    return true;
                 }
 
                 // Regular capture
-                if (absColDiff === 1 && rowDiff === direction && toSquare.piece) {
-                    isValid = true;
+                if (absColDiff === 1 && rowDiff === direction && this.board[toRow][toCol].piece) {
+                    return true;
                 }
 
                 // En passant
@@ -104,29 +113,28 @@ export class ChessEngine {
                     rowDiff === direction &&
                     absColDiff === 1
                 ) {
-                    isValid = true;
+                    return true;
                 }
 
-                break;
+                return false;
             }
 
             case "rook": {
                 if ((rowDiff === 0 || colDiff === 0) && this.isPathClear(fromRow, fromCol, toRow, toCol)) {
-                    isValid = true;
+                    return true;
                 }
-                break;
+                return false;
             }
 
             case "knight": {
-                isValid = (absRowDiff === 2 && absColDiff === 1) || (absRowDiff === 1 && absColDiff === 2);
-                break;
+                return (absRowDiff === 2 && absColDiff === 1) || (absRowDiff === 1 && absColDiff === 2);
             }
 
             case "bishop": {
                 if (absRowDiff === absColDiff && this.isPathClear(fromRow, fromCol, toRow, toCol)) {
-                    isValid = true;
+                    return true;
                 }
-                break;
+                return false;
             }
 
             case "queen": {
@@ -134,19 +142,17 @@ export class ChessEngine {
                     (rowDiff === 0 || colDiff === 0 || absRowDiff === absColDiff) &&
                     this.isPathClear(fromRow, fromCol, toRow, toCol)
                 ) {
-                    isValid = true;
+                    return true;
                 }
-                break;
+                return false;
             }
 
             case "king": {
-                // Normal king move
                 if (absRowDiff <= 1 && absColDiff <= 1) {
-                    isValid = true;
+                    return true;
                 }
 
-                // Castling
-                if (!fromSquare.hasMoved && rowDiff === 0 && absColDiff === 2) {
+                if (!this.board[fromRow][fromCol].hasMoved && rowDiff === 0 && absColDiff === 2) {
                     const isKingside = colDiff > 0;
                     const rookCol = isKingside ? 7 : 0;
                     const rook = this.board[fromRow][rookCol];
@@ -155,27 +161,24 @@ export class ChessEngine {
                         rook.piece &&
                         !rook.hasMoved &&
                         this.isPathClear(fromRow, fromCol, fromRow, rookCol) &&
-                        !this.isInCheck(fromSquare.color) &&
-                        !this.wouldBeInCheck(
-                            fromRow,
-                            fromCol,
-                            fromRow,
-                            fromCol + (isKingside ? 1 : -1),
-                            fromSquare.color
-                        )
+                        !this.isInCheck(color)
                     ) {
-                        isValid = true;
+                        const intermediateCol = fromCol + (isKingside ? 1 : -1);
+                        const tempEngine = new ChessEngine(this.createBoardCopy());
+                        tempEngine.board[fromRow][intermediateCol] = tempEngine.board[fromRow][fromCol];
+                        tempEngine.board[fromRow][fromCol] = { piece: "", color: null, hasMoved: false };
+
+                        if (!tempEngine.isInCheck(color)) {
+                            return true;
+                        }
                     }
                 }
-                break;
+                return false;
             }
-        }
 
-        if (!checkingCheck && isValid) {
-            isValid = !this.wouldBeInCheck(fromRow, fromCol, toRow, toCol, currentPlayer);
+            default:
+                return false;
         }
-
-        return isValid;
     }
 
     isPathClear(fromRow, fromCol, toRow, toCol) {
@@ -228,9 +231,16 @@ export class ChessEngine {
     }
 
     wouldBeInCheck(fromRow, fromCol, toRow, toCol, color) {
+        // Create a deep copy of the board to simulate the move
         const boardCopy = this.createBoardCopy();
+
+        // Make the move on the copy
+        const piece = boardCopy[fromRow][fromCol];
+        boardCopy[toRow][toCol] = { ...piece, hasMoved: true };
+        boardCopy[fromRow][fromCol] = { piece: "", color: null, hasMoved: false };
+
         const tempEngine = new ChessEngine(boardCopy);
-        tempEngine.makeMove(fromRow, fromCol, toRow, toCol);
+
         return tempEngine.isInCheck(color);
     }
 
@@ -292,11 +302,9 @@ export class ChessEngine {
             newBoard[toRow][rookToCol].hasMoved = true;
         }
 
-        // Make the move
         newBoard[toRow][toCol] = { ...fromSquare, hasMoved: true };
         newBoard[fromRow][fromCol] = { piece: "", color: null, hasMoved: false };
 
-        // Update board and last move
         this.board = newBoard;
         this.lastMove = { fromRow, fromCol, toRow, toCol };
 

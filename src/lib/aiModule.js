@@ -1,9 +1,11 @@
 import { ChessEngine } from "./ChessEngine.js";
 
 export class ChessAI {
-    constructor(engine, depth = 3) {
+    constructor(engine, difficulty = "medium") {
         this.engine = engine;
-        this.depth = depth;
+        this.difficulty = difficulty;
+        this.maxThinkingTime = 3000;
+        this.startTime = 0;
     }
 
     static PIECE_VALUES = {
@@ -78,13 +80,16 @@ export class ChessAI {
         ],
     };
 
-    evaluateBoard(isWhite) {
+    setDifficulty(difficulty) {
+        this.difficulty = difficulty;
+    }
+
+    evaluateBoard(isMaximizing) {
         let score = 0;
-        const board = this.engine.board;
 
         for (let row = 0; row < 8; row++) {
             for (let col = 0; col < 8; col++) {
-                const square = board[row][col];
+                const square = this.engine.board[row][col];
                 if (!square.piece) continue;
 
                 const pieceType = this.engine.getPieceType(square.piece);
@@ -99,7 +104,7 @@ export class ChessAI {
             }
         }
 
-        return isWhite ? score : -score;
+        return isMaximizing ? score : -score;
     }
 
     minimax(depth, alpha, beta, isMaximizing) {
@@ -138,23 +143,255 @@ export class ChessAI {
         return bestValue;
     }
 
-    getBestMove() {
+    getMoveRandomization() {
+        switch (this.difficulty) {
+            // % chance of making a suboptimal move
+            case "easy":
+                return 0.3;
+            case "medium":
+                return 0.15;
+            case "hard":
+                return 0;
+            default:
+                return 0.15;
+        }
+    }
+
+    getSearchDepth() {
+        switch (this.difficulty) {
+            case "easy":
+                return 1;
+            case "medium":
+                return 2;
+            case "hard":
+                return 3;
+            default:
+                return 2;
+        }
+    }
+
+    isTimeUp() {
+        return Date.now() - this.startTime > this.maxThinkingTime;
+    }
+
+    findEscapeFromCheck() {
         const moves = this.engine.getAllValidMoves("black");
-        let bestMove = null;
-        let bestValue = Infinity;
+        const escapeMoves = [];
 
         for (const move of moves) {
-            const engineCopy = new ChessEngine(this.engine.createBoardCopy(this.engine.board));
-            engineCopy.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+            if (this.isTimeUp()) {
+                console.error("Time up while finding escape moves");
+                break;
+            }
 
-            const value = this.minimax(this.depth - 1, -Infinity, Infinity, true);
-
-            if (value < bestValue) {
-                bestValue = value;
-                bestMove = move;
+            const engineCopy = new ChessEngine(this.engine.createBoardCopy());
+            try {
+                engineCopy.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                if (!engineCopy.isInCheck("black")) {
+                    escapeMoves.push(move);
+                }
+            } catch (error) {
+                console.error("Error testing escape move:", error);
+                continue;
             }
         }
 
-        return bestMove;
+        if (escapeMoves.length === 0) {
+            return null;
+        }
+
+        // For medium/hard, try to find the best escape move
+        if (this.difficulty !== "easy") {
+            let bestScore = -Infinity;
+            let bestMove = escapeMoves[0];
+
+            for (const move of escapeMoves) {
+                if (this.isTimeUp()) break;
+
+                try {
+                    const engineCopy = new ChessEngine(this.engine.createBoardCopy());
+                    engineCopy.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                    const score = this.evaluateBoard(false);
+
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bestMove = move;
+                    }
+                } catch (error) {
+                    console.error("Error evaluating escape move:", error);
+                    continue;
+                }
+            }
+            return bestMove;
+        }
+
+        // For easy difficulty or if evaluation fails, return random escape move
+        return escapeMoves[Math.floor(Math.random() * escapeMoves.length)];
+    }
+
+    getBestMove() {
+        this.startTime = Date.now();
+
+        try {
+            const moves = this.engine.getAllValidMoves("black");
+
+            if (moves.length === 0) return null;
+
+            // If in check, prioritize escaping check
+            if (this.engine.isInCheck("black")) {
+                const escapeMoves = [];
+
+                for (const move of moves) {
+                    // Test each move in a new engine instance to see if it escapes check
+                    const engineCopy = new ChessEngine(this.engine.createBoardCopy());
+
+                    try {
+                        engineCopy.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+
+                        if (!engineCopy.isInCheck("black")) {
+                            // For each escape move, calculate a simple material score
+                            const score = this.quickEvaluate(engineCopy.board);
+                            escapeMoves.push({ move, score });
+                        }
+                    } catch (error) {
+                        console.error("Error testing escape move:", error);
+                        continue;
+                    }
+                }
+
+                if (escapeMoves.length > 0) {
+                    escapeMoves.sort((a, b) => b.score - a.score);
+
+                    // Choose move based on difficulty
+                    let chosenMove;
+                    if (this.difficulty === "easy") {
+                        const randomIndex = Math.floor(Math.random() * escapeMoves.length);
+                        chosenMove = escapeMoves[randomIndex].move;
+                    } else {
+                        chosenMove = escapeMoves[0].move;
+                    }
+
+                    return chosenMove;
+                }
+
+                return null;
+            }
+
+            const evaluatedMoves = [];
+
+            // Filter obvious blunders for medium/hard
+            let validMoves = moves;
+            if (this.difficulty !== "easy") {
+                validMoves = moves.filter((move) => !this.isBlunder(move));
+                if (validMoves.length === 0) {
+                    // If all moves are blunders, use original moves
+                    validMoves = moves;
+                }
+            }
+
+            for (const move of validMoves) {
+                if (this.isTimeUp()) break;
+
+                const engineCopy = new ChessEngine(this.engine.createBoardCopy());
+                engineCopy.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                const score = this.quickEvaluate(engineCopy.board);
+                evaluatedMoves.push({ move, score });
+            }
+
+            if (evaluatedMoves.length === 0) {
+                // If no moves were evaluated (due to time limit), pick a random valid move
+                const randomMove = validMoves[Math.floor(Math.random() * validMoves.length)];
+                return randomMove;
+            }
+
+            evaluatedMoves.sort((a, b) => b.score - a.score);
+
+            let chosenMove;
+            if (this.difficulty === "easy") {
+                const randomIndex = Math.floor(Math.random() * Math.min(3, evaluatedMoves.length));
+                chosenMove = evaluatedMoves[randomIndex].move;
+            } else if (this.difficulty === "medium") {
+                const topHalf = evaluatedMoves.slice(0, Math.ceil(evaluatedMoves.length / 2));
+                chosenMove = topHalf[Math.floor(Math.random() * topHalf.length)].move;
+            } else {
+                chosenMove = evaluatedMoves[0].move;
+            }
+
+            return chosenMove;
+        } catch (error) {
+            console.error("Error in getBestMove:", error);
+            // Emergency fallback - make any legal move
+            try {
+                const moves = this.engine.getAllValidMoves("black");
+                if (moves.length > 0) {
+                    const randomMove = moves[Math.floor(Math.random() * moves.length)];
+                    return randomMove;
+                }
+            } catch (e) {
+                console.error("Emergency fallback failed:", e);
+            }
+            return null;
+        }
+    }
+
+    quickEvaluate(board) {
+        let score = 0;
+        const values = {
+            pawn: 100,
+            knight: 320,
+            bishop: 330,
+            rook: 500,
+            queen: 900,
+            king: 20000,
+        };
+
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const square = board[row][col];
+                if (!square.piece) continue;
+
+                const pieceType = this.engine.getPieceType(square.piece);
+                if (!pieceType) continue;
+
+                const value = values[pieceType];
+                score += square.color === "white" ? -value : value;
+            }
+        }
+
+        return score;
+    }
+
+    isBlunder(move) {
+        const engineCopy = new ChessEngine(this.engine.createBoardCopy());
+        const movingPiece = engineCopy.board[move.fromRow][move.fromCol];
+        const pieceType = engineCopy.getPieceType(movingPiece.piece);
+
+        if (!pieceType) return false;
+
+        engineCopy.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+
+        // Check if the piece can be immediately captured
+        for (let row = 0; row < 8; row++) {
+            for (let col = 0; col < 8; col++) {
+                const square = engineCopy.board[row][col];
+                if (square.color === "white" && engineCopy.isValidMove(row, col, move.toRow, move.toCol, "white")) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    getBlunderThreshold() {
+        switch (this.difficulty) {
+            case "easy":
+                return 1000; // Allow any moves
+            case "medium":
+                return 300; // Don't blunder pieces bigger than a knight
+            case "hard":
+                return 100; // Don't even blunder pawns
+            default:
+                return 300;
+        }
     }
 }

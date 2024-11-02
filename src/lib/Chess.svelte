@@ -5,6 +5,7 @@
     // Initialize engine and AI
     let engine = $state(new ChessEngine());
     let ai = new ChessAI(engine);
+    let difficulty = $state("medium");
 
     // Game state
     let currentPlayer = $state("white");
@@ -15,7 +16,6 @@
     let statusMessage = $state("White's turn");
     let isAIThinking = $state(false);
 
-    // Initialize the game
     function updateGameStatus() {
         if (promotionPending) {
             statusMessage = "Choose promotion piece";
@@ -31,6 +31,13 @@
         } else {
             statusMessage = `${currentPlayer}'s turn`;
         }
+
+        console.log("New status message:", statusMessage);
+    }
+
+    function handleDifficultyChange(newDifficulty) {
+        difficulty = newDifficulty;
+        ai.setDifficulty(newDifficulty);
     }
 
     function updateMoveHistory(fromRow, fromCol, toRow, toCol) {
@@ -48,9 +55,8 @@
 
     function finishMove() {
         const nextPlayer = currentPlayer === "white" ? "black" : "white";
-
-        // Check game state
         const newStatus = engine.getGameStatus(nextPlayer);
+
         gameStatus = newStatus;
         currentPlayer = nextPlayer;
         selectedPiece = null;
@@ -62,9 +68,7 @@
         if (!promotionPending) return;
 
         engine.promotePawn(promotionPending.row, promotionPending.col, piece);
-        // Force reactivity update
         engine = new ChessEngine(engine.board);
-        // Update AI's reference to the new engine
         ai = new ChessAI(engine);
 
         promotionPending = null;
@@ -72,39 +76,43 @@
     }
 
     async function makeAIMove() {
-        if (currentPlayer === "black" && !promotionPending && gameStatus === "active") {
+        if (currentPlayer === "black" && !promotionPending && (gameStatus === "active" || gameStatus === "check")) {
             isAIThinking = true;
 
-            // Add a small delay to make the AI seem more "natural"
-            await new Promise((resolve) => setTimeout(resolve, 500));
+            try {
+                await new Promise((resolve) => setTimeout(resolve, 100));
+                const move = ai.getBestMove();
 
-            const move = ai.getBestMove();
-            if (move) {
-                // Make the move in the engine
-                const result = engine.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                if (move) {
+                    const result = engine.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                    engine = new ChessEngine(result.board);
 
-                // Force reactivity update by creating a new engine instance
-                engine = new ChessEngine(result.board);
-                // Update AI's reference to the new engine
-                ai = new ChessAI(engine);
+                    updateMoveHistory(move.fromRow, move.fromCol, move.toRow, move.toCol);
 
-                updateMoveHistory(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                    if (result.needsPromotion) {
+                        const promotionPiece = "♛"; // Black queen
+                        handlePromotion(promotionPiece);
+                    } else {
+                        finishMove();
+                    }
 
-                if (result.needsPromotion) {
-                    // AI always promotes to queen
-                    const promotionPiece = currentPlayer === "black" ? "♛" : "♕";
-                    handlePromotion(promotionPiece);
+                    ai = new ChessAI(engine);
                 } else {
-                    finishMove();
+                    gameStatus = engine.isInCheck("black") ? "checkmate" : "stalemate";
+                    updateGameStatus();
                 }
+            } catch (error) {
+                gameStatus = "checkmate";
+                console.error("Error making AI move:", error);
+                updateGameStatus();
+            } finally {
+                isAIThinking = false;
             }
-
-            isAIThinking = false;
         }
     }
 
     function handleSquareClick(row, col) {
-        if (promotionPending || isAIThinking || gameStatus !== "active") return;
+        if (promotionPending || isAIThinking || (gameStatus !== "active" && gameStatus !== "check")) return;
 
         const square = engine.board[row][col];
 
@@ -112,14 +120,22 @@
             const [selectedRow, selectedCol] = selectedPiece;
 
             if (engine.isValidMove(selectedRow, selectedCol, row, col, currentPlayer)) {
-                const result = engine.makeMove(selectedRow, selectedCol, row, col);
-                updateMoveHistory(selectedRow, selectedCol, row, col);
+                try {
+                    const result = engine.makeMove(selectedRow, selectedCol, row, col);
+                    engine = new ChessEngine(result.board);
 
-                if (result.needsPromotion) {
-                    promotionPending = result.promotionData;
-                    updateGameStatus();
-                } else {
-                    finishMove();
+                    updateMoveHistory(selectedRow, selectedCol, row, col);
+
+                    if (result.needsPromotion) {
+                        promotionPending = result.promotionData;
+                        updateGameStatus();
+                    } else {
+                        finishMove();
+                        ai = new ChessAI(engine, difficulty);
+                    }
+                } catch (error) {
+                    console.error("Error making move:", error);
+                    selectedPiece = null;
                 }
             } else {
                 selectedPiece = null;
@@ -155,18 +171,50 @@
         black: ["♛", "♜", "♝", "♞"],
     };
 
+    function resetGame() {
+        engine = new ChessEngine();
+        ai = new ChessAI(engine, difficulty);
+        currentPlayer = "white";
+        selectedPiece = null;
+        moveHistory = [];
+        gameStatus = "active";
+        promotionPending = null;
+        statusMessage = "White's turn";
+        isAIThinking = false;
+    }
+
     // Watch for player moves and respond with AI moves
     $effect(() => {
-        if (currentPlayer === "black" && !promotionPending && gameStatus === "active") {
+        if (currentPlayer === "black" && !isAIThinking && (gameStatus === "active" || gameStatus === "check")) {
             makeAIMove();
         }
     });
 
-    // Initialize game status
     updateGameStatus();
 </script>
 
 <div class="game">
+    <div class="controls">
+        <div class="difficulty-selector">
+            <label for="difficulty">AI Difficulty:</label>
+            <select
+                id="difficulty"
+                value={difficulty}
+                onchange={(e) => handleDifficultyChange(e.target.value)}
+            >
+                <option value="easy">Easy</option>
+                <option value="medium">Medium</option>
+                <option value="hard">Hard</option>
+            </select>
+        </div>
+        <button
+            class="reset-button"
+            onclick={resetGame}
+        >
+            New Game
+        </button>
+    </div>
+
     <div class="status">{statusMessage}</div>
 
     {#if promotionPending}
@@ -343,5 +391,37 @@
     .move {
         font-family: monospace;
         padding: 0.2rem 0;
+    }
+
+    .controls {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        align-items: center;
+    }
+
+    .difficulty-selector {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+    }
+
+    .difficulty-selector select {
+        padding: 0.25rem 0.5rem;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+    }
+
+    .reset-button {
+        padding: 0.25rem 0.75rem;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        background-color: #f0f0f0;
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+
+    .reset-button:hover {
+        background-color: #e0e0e0;
     }
 </style>
