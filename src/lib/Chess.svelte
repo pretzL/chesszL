@@ -1,6 +1,11 @@
 <script>
+    import "./styles/components/chess.scss";
     import { ChessEngine } from "./ChessEngine.js";
     import { ChessAI } from "./aiModule.js";
+    import { storage } from "$lib/utils/storage";
+    import { browser } from "$app/environment";
+
+    let theme = $state(storage.get("chess-theme", "light"));
 
     // Initialize engine and AI
     let engine = $state(new ChessEngine());
@@ -15,6 +20,11 @@
     let promotionPending = $state(null);
     let statusMessage = $state("White's turn");
     let isAIThinking = $state(false);
+
+    function toggleTheme() {
+        theme = theme === "light" ? "dark" : "light";
+        storage.set("chess-theme", theme);
+    }
 
     function updateGameStatus() {
         if (promotionPending) {
@@ -31,8 +41,6 @@
         } else {
             statusMessage = `${currentPlayer}'s turn`;
         }
-
-        console.log("New status message:", statusMessage);
     }
 
     function handleDifficultyChange(newDifficulty) {
@@ -190,28 +198,49 @@
         }
     });
 
+    $effect(() => {
+        if (browser) {
+            document.documentElement.setAttribute("data-theme", theme);
+        }
+    });
+
     updateGameStatus();
 </script>
 
 <div class="game">
     <div class="controls">
-        <div class="difficulty-selector">
-            <label for="difficulty">AI Difficulty:</label>
-            <select
-                id="difficulty"
-                value={difficulty}
-                onchange={(e) => handleDifficultyChange(e.target.value)}
+        <div class="control-group">
+            <div class="difficulty-selector">
+                <label
+                    for="difficulty"
+                    class="difficulty-title">AI Difficulty:</label
+                >
+                <select
+                    id="difficulty"
+                    value={difficulty}
+                    onchange={(e) => handleDifficultyChange(e.target.value)}
+                >
+                    <option value="easy">Easy</option>
+                    <option value="medium">Medium</option>
+                    <option value="hard">Hard</option>
+                </select>
+            </div>
+            <button
+                class="reset-button"
+                onclick={resetGame}
             >
-                <option value="easy">Easy</option>
-                <option value="medium">Medium</option>
-                <option value="hard">Hard</option>
-            </select>
+                New Game
+            </button>
         </div>
         <button
-            class="reset-button"
-            onclick={resetGame}
+            class="theme-toggle"
+            onclick={toggleTheme}
         >
-            New Game
+            {#if theme === "light"}
+                ☾ Dark Mode
+            {:else}
+                ☼ Light Mode
+            {/if}
         </button>
     </div>
 
@@ -273,18 +302,20 @@
     </div>
 </div>
 
-<style>
+<style lang="scss">
     .game {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 1rem;
-        padding: 1rem;
+        gap: $spacing-md;
+        padding: $spacing-md;
+        background-color: var(--bg-primary);
+        min-height: 100vh;
     }
 
     .game-container {
         display: flex;
-        gap: 2rem;
+        gap: $spacing-lg;
         align-items: flex-start;
         position: relative;
     }
@@ -292,23 +323,26 @@
     .status {
         font-size: 1.2rem;
         font-weight: bold;
-        margin-bottom: 1rem;
+        margin-bottom: $spacing-md;
+        color: var(--text-primary);
     }
 
     .ai-thinking {
         font-style: italic;
-        color: #666;
-        margin-bottom: 1rem;
+        color: var(--text-secondary);
+        margin-bottom: $spacing-md;
         position: absolute;
         top: -1.5rem;
     }
 
     .board {
-        width: 400px;
-        height: 400px;
-        border: 2px solid #333;
+        width: $board-size;
+        height: $board-size;
+        border: 2px solid var(--border-color);
+        border-radius: $border-radius;
         display: grid;
         grid-template-columns: repeat(8, 1fr);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
 
     .square {
@@ -317,28 +351,32 @@
         align-items: center;
         font-size: 2em;
         cursor: pointer;
-        transition: background-color 0.2s;
+        transition: all 0.2s ease;
         aspect-ratio: 1 / 1;
-    }
 
-    .square.white {
-        background-color: #fff;
-    }
+        &.white {
+            background-color: var(--bg-board-light);
+        }
 
-    .square.black {
-        background-color: #ccc;
-    }
+        &.black {
+            background-color: var(--bg-board-dark);
+        }
 
-    .square.selected {
-        background-color: #7f7fff;
-    }
+        &.selected {
+            background-color: var(--highlight-selected);
+        }
 
-    .square.valid-move {
-        background-color: #7fff7f;
-    }
+        &.valid-move {
+            background-color: var(--highlight-move);
+        }
 
-    .square.last-move {
-        background-color: #ffffa0;
+        &.last-move {
+            background-color: var(--highlight-last-move);
+        }
+
+        &:hover {
+            filter: brightness(1.1);
+        }
     }
 
     .promotion-dialog {
@@ -346,82 +384,133 @@
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        background-color: white;
-        border: 2px solid #333;
-        padding: 1rem;
+        background-color: var(--bg-primary);
+        border: 2px solid var(--border-color);
+        border-radius: $border-radius;
+        padding: $spacing-md;
         display: flex;
-        gap: 1rem;
-        z-index: 10;
+        gap: $spacing-md;
+        z-index: $z-modal;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
     }
 
     .promotion-piece {
         font-size: 2em;
-        padding: 0.5rem 1rem;
+        padding: $spacing-sm $spacing-md;
         cursor: pointer;
-        border: 1px solid #ccc;
-        background: white;
-        transition: background-color 0.2s;
-    }
+        border: 1px solid var(--border-color);
+        border-radius: $border-radius;
+        background: var(--bg-primary);
+        transition: all 0.2s ease;
 
-    .promotion-piece:hover {
-        background-color: #f0f0f0;
+        &:hover {
+            background-color: var(--button-hover);
+        }
     }
 
     .move-history {
         min-width: 200px;
-        max-height: 400px;
+        max-height: $board-size;
         overflow-y: auto;
-        border: 1px solid #ccc;
-        padding: 1rem;
-        background-color: #f8f8f8;
-    }
+        border: 1px solid var(--border-color);
+        border-radius: $border-radius;
+        padding: $spacing-md;
+        background-color: var(--bg-secondary);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 
-    .move-history h3 {
-        margin-top: 0;
-        margin-bottom: 0.5rem;
-        text-align: center;
+        h3 {
+            margin-top: 0;
+            margin-bottom: $spacing-sm;
+            text-align: center;
+            color: var(--text-primary);
+        }
     }
 
     .moves {
         display: flex;
         flex-direction: column;
-        gap: 0.5rem;
+        gap: $spacing-sm;
     }
 
     .move {
         font-family: monospace;
-        padding: 0.2rem 0;
+        padding: $spacing-sm 0;
+        color: var(--text-secondary);
     }
 
     .controls {
         display: flex;
-        gap: 1rem;
-        margin-bottom: 1rem;
+        gap: $spacing-md;
+        margin-bottom: $spacing-md;
         align-items: center;
+        width: 100%;
+        max-width: $board-size;
+        justify-content: space-between;
+
+        .control-group {
+            display: flex;
+            gap: $spacing-md;
+            align-items: center;
+        }
+
+        button {
+            text-wrap: nowrap;
+        }
     }
 
     .difficulty-selector {
         display: flex;
-        gap: 0.5rem;
+        gap: $spacing-sm;
         align-items: center;
+
+        select {
+            padding: $spacing-sm;
+            border-radius: $border-radius;
+            border: 1px solid var(--border-color);
+            background-color: var(--button-bg);
+            color: var(--button-text);
+            cursor: pointer;
+            transition: all 0.2s ease;
+
+            &:hover {
+                background-color: var(--button-hover);
+            }
+        }
+
+        .difficulty-title {
+            text-wrap: nowrap;
+        }
     }
 
-    .difficulty-selector select {
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        border: 1px solid #ccc;
-    }
-
-    .reset-button {
-        padding: 0.25rem 0.75rem;
-        border-radius: 4px;
-        border: 1px solid #ccc;
-        background-color: #f0f0f0;
+    .reset-button,
+    .theme-toggle {
+        padding: $spacing-sm $spacing-md;
+        border-radius: $border-radius;
+        border: 1px solid var(--border-color);
+        background-color: var(--button-bg);
+        color: var(--button-text);
         cursor: pointer;
-        transition: background-color 0.2s;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: $spacing-sm;
+        font-weight: 500;
+
+        &:hover {
+            background-color: var(--button-hover);
+        }
     }
 
-    .reset-button:hover {
-        background-color: #e0e0e0;
+    @media (max-width: $breakpoint-md) {
+        .game-container {
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .move-history {
+            width: 100%;
+            max-width: $board-size;
+            max-height: 200px;
+        }
     }
 </style>
