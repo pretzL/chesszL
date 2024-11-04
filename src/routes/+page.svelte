@@ -1,5 +1,8 @@
 <script>
+    import "$lib/styles/global.scss";
     import Chess from "$lib/Chess.svelte";
 </script>
 
-<Chess />
+<div class="container">
+    <Chess />
+</div>
