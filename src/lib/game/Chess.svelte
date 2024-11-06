@@ -1,6 +1,4 @@
-<!--Chess.svelte-->
 <script>
-    import "../styles/components/chess.scss";
     import { ChessEngine } from "./ChessEngine.js";
     import { ChessAI } from "./aiModule.js";
     import { ChessGameClient } from "../client/chessGameClient.js";
@@ -461,9 +459,8 @@
                     </div>
                 {:else}
                     <div class="game-info">
-                        Playing as: {playerColor}
-                        <br />
-                        Opponent: {opponent}
+                        <p>Playing as: <span class="inline-badge">{playerColor}</span></p>
+                        <p>Opponent: <span class="inline-badge">{opponent}</span></p>
                     </div>
                 {/if}
 
@@ -551,6 +548,28 @@
 </div>
 
 <style lang="scss">
+    @mixin button-base {
+        padding: $spacing-sm $spacing-md;
+        border-radius: $border-radius;
+        border: 1px solid var(--border-color);
+        background-color: var(--button-bg);
+        color: var(--button-text);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-weight: 500;
+
+        &:hover {
+            background-color: var(--button-hover);
+        }
+    }
+
+    @mixin card-base {
+        background-color: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: $border-radius;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
     .game {
         display: flex;
         flex-direction: column;
@@ -558,7 +577,20 @@
         gap: $spacing-md;
         padding: $spacing-md;
         background-color: var(--bg-primary);
+        color: var(--text-primary);
         min-height: 100vh;
+    }
+
+    .game-info {
+        display: flex;
+        gap: $spacing-md;
+
+        p {
+            display: flex;
+            align-items: center;
+            gap: $spacing-sm;
+            text-wrap: nowrap;
+        }
     }
 
     .game-container {
@@ -575,6 +607,9 @@
         margin-bottom: $spacing-md;
         color: var(--text-primary);
         align-self: flex-start;
+        padding: 2px 6px;
+        border-radius: $border-radius;
+        font-size: 0.8em;
     }
 
     .ai-thinking {
@@ -642,31 +677,20 @@
         gap: $spacing-md;
         z-index: $z-modal;
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-    }
 
-    .promotion-piece {
-        font-size: 2em;
-        padding: $spacing-sm $spacing-md;
-        cursor: pointer;
-        border: 1px solid var(--border-color);
-        border-radius: $border-radius;
-        background: var(--bg-primary);
-        transition: all 0.2s ease;
-
-        &:hover {
-            background-color: var(--button-hover);
+        .promotion-piece {
+            @include button-base;
+            font-size: 2em;
+            padding: $spacing-md;
         }
     }
 
     .move-history {
+        @include card-base;
         min-width: 200px;
         max-height: $board-size;
         overflow-y: auto;
-        border: 1px solid var(--border-color);
-        border-radius: $border-radius;
         padding: $spacing-md;
-        background-color: var(--bg-secondary);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 
         h3 {
             margin-top: 0;
@@ -714,13 +738,13 @@
         margin-bottom: $spacing-md;
         align-items: center;
         width: 100%;
-        max-width: $board-size;
         justify-content: space-between;
 
         .control-group {
             display: flex;
             gap: $spacing-md;
             align-items: center;
+            width: 100%;
         }
 
         button {
@@ -729,6 +753,7 @@
     }
 
     .theme-toggle {
+        @include button-base;
         position: absolute;
         top: $spacing-md;
         right: $spacing-md;
@@ -740,17 +765,8 @@
         align-items: center;
 
         select {
+            @include button-base;
             padding: $spacing-sm;
-            border-radius: $border-radius;
-            border: 1px solid var(--border-color);
-            background-color: var(--button-bg);
-            color: var(--button-text);
-            cursor: pointer;
-            transition: all 0.2s ease;
-
-            &:hover {
-                background-color: var(--button-hover);
-            }
         }
 
         .difficulty-title {
@@ -778,10 +794,8 @@
 
     .players-list,
     .games-list {
-        background: var(--bg-secondary);
+        @include card-base;
         padding: $spacing-md;
-        border-radius: $border-radius;
-        border: 1px solid var(--border-color);
 
         h3 {
             margin-top: 0;
@@ -809,10 +823,6 @@
     }
 
     .status {
-        padding: 2px 6px;
-        border-radius: $border-radius;
-        font-size: 0.8em;
-
         &.available {
             background: var(--success);
             color: white;

@@ -1,4 +1,3 @@
-// aiModule.js
 import { ChessEngine } from "./ChessEngine.js";
 
 export class ChessAI {

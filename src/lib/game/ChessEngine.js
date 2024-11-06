@@ -1,4 +1,3 @@
-// ChessEngine.js
 export class ChessEngine {
     constructor(initialBoard = null) {
         this.board = initialBoard || this.initializeBoard();
