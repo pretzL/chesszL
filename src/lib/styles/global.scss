@@ -111,3 +111,16 @@ input {
     cursor: pointer;
     transition: all 0.2s ease;
 }
+
+.inline-badge {
+    padding: $spacing-sm $spacing-md;
+    border-radius: $border-radius;
+    border: 1px solid var(--border-color);
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    font-weight: 500;
+}
