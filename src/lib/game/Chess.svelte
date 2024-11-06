@@ -68,6 +68,7 @@
                 piece,
                 from: notation.from,
                 to: notation.to,
+                player: currentPlayer,
             },
         ];
     }
@@ -346,6 +347,16 @@
 </script>
 
 <div class="game">
+    <button
+        class="ui-button theme-toggle"
+        onclick={toggleTheme}
+    >
+        {#if theme === "light"}
+            ☾ Dark Mode
+        {:else}
+            ☼ Light Mode
+        {/if}
+    </button>
     {#if !gameMode}
         <div class="mode-select">
             <h2>Select Game Mode</h2>
@@ -476,17 +487,6 @@
                     </button>
                 {/if}
             </div>
-
-            <button
-                class="ui-button theme-toggle"
-                onclick={toggleTheme}
-            >
-                {#if theme === "light"}
-                    ☾ Dark Mode
-                {:else}
-                    ☼ Light Mode
-                {/if}
-            </button>
         </div>
 
         <div class="status">{statusMessage}</div>
@@ -726,6 +726,12 @@
         }
     }
 
+    .theme-toggle {
+        position: absolute;
+        top: $spacing-md;
+        right: $spacing-md;
+    }
+
     .difficulty-selector {
         display: flex;
         gap: $spacing-sm;
@@ -811,7 +817,7 @@
         }
 
         &.playing {
-            background: var(--warning);
+            background: var(--error);
             color: white;
         }
     }
