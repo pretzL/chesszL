@@ -81,3 +81,31 @@ body {
     max-width: $breakpoint-lg;
   }
 }
+
+// Global styling
+.ui-button {
+    padding: $spacing-sm $spacing-md;
+    border-radius: $border-radius;
+    border: 1px solid var(--border-color);
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: $spacing-sm;
+    font-weight: 500;
+
+    &:hover {
+        background-color: var(--button-hover);
+    }
+}
+
+input {
+    padding: $spacing-sm $spacing-md;
+    border-radius: $border-radius;
+    border: 1px solid var(--border-color);
+    color: var(--button-text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}

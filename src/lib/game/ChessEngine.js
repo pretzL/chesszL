@@ -1,3 +1,4 @@
+// ChessEngine.js
 export class ChessEngine {
     constructor(initialBoard = null) {
         this.board = initialBoard || this.initializeBoard();
@@ -335,12 +336,12 @@ export class ChessEngine {
     }
 
     getMoveNotation(fromRow, fromCol, toRow, toCol) {
-        const file = ["a", "b", "c", "d", "e", "f", "g", "h"];
-        const rank = ["8", "7", "6", "5", "4", "3", "2", "1"];
+        const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+        const ranks = ["8", "7", "6", "5", "4", "3", "2", "1"];
 
         return {
-            from: `${file[fromCol]}${rank[fromRow]}`,
-            to: `${file[toCol]}${rank[toRow]}`,
+            from: `${files[fromCol]}${ranks[fromRow]}`,
+            to: `${files[toCol]}${ranks[toRow]}`,
         };
     }
 }
