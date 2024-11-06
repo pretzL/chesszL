@@ -11,7 +11,7 @@
     let theme = $state(storage.get("chess-theme", "light"));
 
     let gameMode = $state(null); // 'ai' or 'multiplayer'
-    let username = "";
+    let username = storage.get("chess-username", "");
     let lobbyPlayers = $state([]);
     let availableGames = $state([]);
     let gameClient = $state(null);
@@ -278,6 +278,8 @@
 
     async function joinLobby() {
         if (username.trim() === "") return;
+
+        storage.set("chess-username", username);
 
         if (!gameClient) {
             gameClient = new ChessGameClient();
