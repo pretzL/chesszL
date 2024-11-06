@@ -421,14 +421,18 @@
                     <ul>
                         {#each availableGames as game}
                             {#if game.status === "waiting"}
-                                <li class="game-item">
+                                <li class="player-item">
                                     {game.white} vs {game.black}
-                                    <button
-                                        class="ui-button join-game"
-                                        onclick={() => joinGame(game.gameId)}
-                                    >
-                                        Join
-                                    </button>
+                                    {#if game.white !== username}
+                                        <button
+                                            class="ui-button join-game"
+                                            onclick={() => joinGame(game.gameId)}
+                                        >
+                                            Join
+                                        </button>
+                                    {:else}
+                                        <span class="inline-badge your-game">Your game</span>
+                                    {/if}
                                 </li>
                             {/if}
                         {/each}
@@ -837,6 +841,12 @@
     .create-game {
         width: 100%;
         margin-bottom: $spacing-md;
+    }
+
+    .your-game {
+        font-style: italic;
+        color: var(--text-secondary);
+        font-size: 0.9em;
     }
 
     @media (max-width: $breakpoint-md) {
