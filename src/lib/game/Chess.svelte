@@ -283,7 +283,11 @@
             gameClient = new ChessGameClient();
 
             try {
-                await gameClient.connect("ws://localhost:3001/chess");
+                const wsUrl = import.meta.env.DEV
+                    ? "ws://localhost:3001/chess"
+                    : `wss://${window.location.host}/.netlify/functions/websocket`;
+
+                await gameClient.connect(wsUrl);
 
                 gameClient.setCallbacks({
                     onLobbyUpdate: (players, games) => {
