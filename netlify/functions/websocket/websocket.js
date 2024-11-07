@@ -1,6 +1,6 @@
 import { WebSocketServer } from "ws";
 import { nanoid } from "nanoid";
-import { ChessGameServer } from "../../../server/chessGameServer.js";
+import { ChessGameServer } from "../../../src/lib/server/ChessGameServer.js";
 
 let gameServer;
 
