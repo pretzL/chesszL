@@ -6,8 +6,7 @@
 		"dev:app": "vite dev",
 		"dev:websocket": "node dev-server.js",
 		"dev": "concurrently \"npm run dev:app\" \"npm run dev:websocket\"",
-		"build": "vite build && npm run copy-static",
-		"copy-static": "cp -r static/* build/",
+		"build": "vite build",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch"

@@ -1,2 +1,2 @@
-/ws/* /.netlify/functions/websocket 101
-/* /200.html 200
+/ws/*  /.netlify/functions/websocket  101
+/*     /index.html                    200
