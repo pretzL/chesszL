@@ -1,5 +1,5 @@
-const { WebSocketServer } = require("ws");
-const { nanoid } = require("nanoid");
+import { WebSocketServer } from "ws";
+import { nanoid } from "nanoid";
 
 class ChessGameServer {
     constructor(server) {
@@ -249,4 +249,4 @@ class ChessGameServer {
     }
 }
 
-module.exports = { ChessGameServer };
+export default ChessGameServer;
