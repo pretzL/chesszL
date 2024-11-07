@@ -6,3 +6,6 @@
 [functions]
   external_node_modules = ["ws"]
   node_bundler = "esbuild"
+
+[build.environment]
+  NODE_VERSION = "18"
