@@ -24,6 +24,7 @@
 	},
 	"dependencies": {
 		"@netlify/functions": "^2.8.2",
+		"@sveltejs/adapter-netlify": "^4.3.6",
 		"nanoid": "^5.0.8",
 		"ws": "^8.18.0"
 	}
