@@ -5,10 +5,3 @@
 
 [functions]
   node_bundler = "esbuild"
-
-[[redirects]]
-  from = "/.netlify/functions/websocket/*"
-  to = "/.netlify/functions/websocket/:splat"
-  status = 200
-  force = true
-  conditions = { Role = "system" }
