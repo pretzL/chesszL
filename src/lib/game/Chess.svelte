@@ -284,9 +284,8 @@
 
             try {
                 const wsUrl = import.meta.env.PROD
-                    ? `wss://${window.location.hostname}/.netlify/functions/websocket`
+                    ? `wss://${window.location.hostname}/ws`
                     : "ws://localhost:3001/chess";
-
                 await gameClient.connect(wsUrl);
 
                 gameClient.setCallbacks({

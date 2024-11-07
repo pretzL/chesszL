@@ -8,8 +8,11 @@ const config = {
             edge: false,
             split: false,
         }),
-        files: {
-            assets: "static",
+        paths: {
+            base: "",
+        },
+        prerender: {
+            handleMissingId: "warn",
         },
     },
     preprocess: vitePreprocess(),
