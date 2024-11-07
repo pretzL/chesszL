@@ -1,0 +1,8 @@
+[build]
+  command = "npm run build"
+  publish = "build"
+  functions = "netlify/functions"
+
+[functions]
+  external_node_modules = ["ws"]
+  node_bundler = "esbuild"
