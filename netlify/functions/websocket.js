@@ -54,7 +54,7 @@ async function broadcast(message) {
 
     for (const [connectionId] of clients) {
         promises.push(
-            fetch(`${process.env.URL}/.netlify/functions/websocket/${connectionId}`, {
+            fetch(`${process.env.URL}/.netlify/functions/${connectionId}`, {
                 method: "POST",
                 body: stringifiedMessage,
             }).catch(console.error)
