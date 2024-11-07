@@ -1,10 +1,9 @@
-// netlify/functions/websocket/websocket.js
-import { HandlerEvent, HandlerContext } from "@netlify/functions";
-import { ChessGameServer } from "../../../src/lib/server/ChessGameServer.js";
+const { HandlerEvent, HandlerContext } = require("@netlify/functions");
+const { ChessGameServer } = require("../../../server/chessGameServer.js");
 
 let gameServer;
 
-export const handler = async (event, context) => {
+exports.handler = async (event, context) => {
     const { headers } = event;
 
     if (!gameServer) {
@@ -12,7 +11,6 @@ export const handler = async (event, context) => {
     }
 
     if (event.httpMethod === "GET") {
-        // Handle WebSocket upgrade request
         if (headers["upgrade"] === "websocket") {
             return {
                 statusCode: 101,
@@ -33,7 +31,7 @@ export const handler = async (event, context) => {
 
 function computeAcceptKey(key) {
     const GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-    return crypto
+    return require("crypto")
         .createHash("sha1")
         .update(key + GUID)
         .digest("base64");
