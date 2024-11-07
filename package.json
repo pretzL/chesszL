@@ -6,7 +6,8 @@
 		"dev:app": "vite dev",
 		"dev:websocket": "node dev-server.js",
 		"dev": "concurrently \"npm run dev:app\" \"npm run dev:websocket\"",
-		"build": "vite build",
+		"build": "vite build && npm run build:functions",
+		"build:functions": "netlify-lambda build netlify/functions",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch"
@@ -16,6 +17,7 @@
 		"@sveltejs/kit": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^4.0.0",
 		"concurrently": "^8.2.2",
+		"netlify-lambda": "^2.0.16",
 		"sass": "^1.80.6",
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",

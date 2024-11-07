@@ -1,7 +1,0 @@
-[build]
-  command = "npm run build"
-  functions = "netlify/functions"
-  publish = ".netlify/functions-internal"
-
-[functions]
-  node_bundler = "esbuild"

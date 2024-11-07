@@ -1,4 +1,4 @@
-// server/websocketServer.js
+// server/chessGameServer.js
 import { WebSocketServer } from "ws";
 import { nanoid } from "nanoid";
 

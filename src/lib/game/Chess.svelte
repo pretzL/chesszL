@@ -283,9 +283,9 @@
             gameClient = new ChessGameClient();
 
             try {
-                const wsUrl = import.meta.env.DEV
-                    ? "ws://localhost:3001/chess"
-                    : `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/.netlify/functions/websocket`;
+                const wsUrl = import.meta.env.PROD
+                    ? `wss://${window.location.hostname}/.netlify/functions/websocket`
+                    : "ws://localhost:3001/chess";
 
                 await gameClient.connect(wsUrl);
 
