@@ -1,6 +1,7 @@
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
-import { writeFileSync, copyFileSync } from "fs";
+import { mkdirSync, copyFileSync, existsSync } from "fs";
+import { resolve } from "path";
 
 export default defineConfig({
     plugins: [
@@ -8,7 +9,19 @@ export default defineConfig({
         {
             name: "copy-server",
             closeBundle: () => {
-                copyFileSync("./server.js", "build/server.js");
+                const buildDir = resolve(process.cwd(), "build");
+
+                if (!existsSync(buildDir)) {
+                    mkdirSync(buildDir, { recursive: true });
+                }
+
+                try {
+                    copyFileSync(resolve(process.cwd(), "server.js"), resolve(buildDir, "server.js"));
+                    console.log("Successfully copied server.js to build directory");
+                } catch (error) {
+                    console.error("Error copying server.js:", error);
+                    throw error;
+                }
             },
         },
     ],

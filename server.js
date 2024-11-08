@@ -2,9 +2,9 @@ import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { nanoid } from "nanoid";
 import { fileURLToPath } from "url";
-import { dirname, join } from "path";
+import { dirname } from "path";
 import express from "express";
-import { handler } from "./build/handler.js";
+import { handler } from "./handler.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
