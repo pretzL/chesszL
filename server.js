@@ -4,15 +4,13 @@ import { nanoid } from "nanoid";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import express from "express";
-import { handler } from "./handler.js";
+import { handler } from "./build/handler.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const app = express();
 const server = createServer(app);
 const wss = new WebSocketServer({ server });
-
-app.use(express.static("build"));
 
 app.use(handler);
 
