@@ -1,8 +1,17 @@
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
+import { writeFileSync, copyFileSync } from "fs";
 
 export default defineConfig({
-    plugins: [sveltekit()],
+    plugins: [
+        sveltekit(),
+        {
+            name: "copy-server",
+            closeBundle: () => {
+                copyFileSync("server.js", "build/server.js");
+            },
+        },
+    ],
     css: {
         preprocessorOptions: {
             scss: {
@@ -11,8 +20,11 @@ export default defineConfig({
         },
     },
     server: {
-        fs: {
-            allow: [".."],
+        proxy: {
+            "/ws": {
+                target: "ws://localhost:3000",
+                ws: true,
+            },
         },
     },
 });
