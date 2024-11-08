@@ -158,6 +158,75 @@ wss.on("connection", (ws) => {
     });
 });
 
+function broadcastLobbyState() {
+    const lobbyState = Array.from(clients.entries()).map(([id, client]) => ({
+        userId: id,
+        username: client.username,
+        status: client.status,
+    }));
+
+    const gamesList = Array.from(games.entries()).map(([id, game]) => ({
+        gameId: id,
+        white: game.white.username,
+        black: game.black?.username || "Waiting...",
+        status: game.gameState.status,
+    }));
+
+    const message = JSON.stringify({
+        type: "lobby_update",
+        lobby: lobbyState,
+        games: gamesList,
+    });
+
+    clients.forEach((client) => {
+        client.ws.send(message);
+    });
+}
+
+function getInitialBoard() {
+    return Array(8)
+        .fill(null)
+        .map((_, row) =>
+            Array(8)
+                .fill(null)
+                .map((_, col) => {
+                    if (row === 0) {
+                        return {
+                            piece: ["♜", "♞", "♝", "♛", "♚", "♝", "♞", "♜"][col],
+                            color: "black",
+                            hasMoved: false,
+                        };
+                    }
+                    if (row === 1) {
+                        return {
+                            piece: "♟",
+                            color: "black",
+                            hasMoved: false,
+                        };
+                    }
+                    if (row === 6) {
+                        return {
+                            piece: "♙",
+                            color: "white",
+                            hasMoved: false,
+                        };
+                    }
+                    if (row === 7) {
+                        return {
+                            piece: ["♖", "♘", "♗", "♕", "♔", "♗", "♘", "♖"][col],
+                            color: "white",
+                            hasMoved: false,
+                        };
+                    }
+                    return {
+                        piece: "",
+                        color: null,
+                        hasMoved: false,
+                    };
+                })
+        );
+}
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
