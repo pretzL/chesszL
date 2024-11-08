@@ -8,7 +8,7 @@ export default defineConfig({
         {
             name: "copy-server",
             closeBundle: () => {
-                copyFileSync("server.js", "build/server.js");
+                copyFileSync("./server.js", "build/server.js");
             },
         },
     ],
