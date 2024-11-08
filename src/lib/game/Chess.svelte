@@ -283,9 +283,7 @@
             gameClient = new ChessGameClient();
 
             try {
-                const wsUrl = import.meta.env.PROD
-                    ? `wss://${window.location.hostname}/ws`
-                    : "ws://localhost:3001/chess";
+                const wsUrl = import.meta.env.PROD ? `wss://${window.location.host}` : "ws://localhost:3000";
                 await gameClient.connect(wsUrl);
 
                 gameClient.setCallbacks({
