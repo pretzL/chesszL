@@ -1,7 +1,6 @@
 import { WebSocketServer } from "ws";
 import { createServer } from "http";
 import { nanoid } from "nanoid";
-import { ChessEngine } from "./src/lib/game/ChessEngine.js";
 
 const server = createServer((req, res) => {
     res.writeHead(404);
@@ -226,7 +225,7 @@ function getInitialBoard() {
         );
 }
 
-const PORT = 3001;
+const PORT = 3000;
 server.listen(PORT, () => {
     console.log(`WebSocket server running on port ${PORT}`);
 });
