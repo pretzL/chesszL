@@ -4,27 +4,7 @@ import { mkdirSync, copyFileSync, existsSync } from "fs";
 import { resolve } from "path";
 
 export default defineConfig({
-    plugins: [
-        sveltekit(),
-        {
-            name: "copy-server",
-            closeBundle: () => {
-                const buildDir = resolve(process.cwd(), "build");
-
-                if (!existsSync(buildDir)) {
-                    mkdirSync(buildDir, { recursive: true });
-                }
-
-                try {
-                    copyFileSync(resolve(process.cwd(), "server.js"), resolve(buildDir, "server.js"));
-                    console.log("Successfully copied server.js to build directory");
-                } catch (error) {
-                    console.error("Error copying server.js:", error);
-                    throw error;
-                }
-            },
-        },
-    ],
+    plugins: [sveltekit()],
     css: {
         preprocessorOptions: {
             scss: {
