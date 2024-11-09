@@ -5,6 +5,7 @@
     import { storage } from "$lib/utils/storage";
     import { browser } from "$app/environment";
     import { onDestroy } from "svelte";
+    import { backIn } from "svelte/easing";
 
     let theme = $state(storage.get("chess-theme", "light"));
 
@@ -285,7 +286,7 @@
             try {
                 const wsUrl = import.meta.env.PROD
                     ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}`
-                    : "ws://localhost:3000";
+                    : "ws://localhost:3000/chess";
                 await gameClient.connect(wsUrl);
 
                 gameClient.setCallbacks({
@@ -360,6 +361,14 @@
             ☼ Light Mode
         {/if}
     </button>
+    {#if gameMode}
+        <button
+            class="ui-button back-button"
+            onclick={() => (gameMode = null)}
+        >
+            Back
+        </button>
+    {/if}
     {#if !gameMode}
         <div class="mode-select">
             <h2>Select Game Mode</h2>
@@ -764,6 +773,13 @@
         position: absolute;
         top: $spacing-md;
         right: $spacing-md;
+    }
+
+    .back-button {
+        @include button-base;
+        position: absolute;
+        top: $spacing-md;
+        left: $spacing-md;
     }
 
     .difficulty-selector {
