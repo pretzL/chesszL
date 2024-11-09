@@ -27,6 +27,7 @@
     let currentPlayer = $state("white");
     let selectedPiece = $state(null);
     let moveHistory = $state([]);
+    let reversedMoveHistory = $derived([...moveHistory].reverse());
     let gameStatus = $state("active");
     let promotionPending = $state(null);
     let statusMessage = $state("White's turn");
@@ -732,9 +733,9 @@
             <div class="move-history">
                 <h3>Move History</h3>
                 <div class="moves">
-                    {#each moveHistory as move, i}
+                    {#each reversedMoveHistory as move, i}
                         <div class="move">
-                            {i + 1}. {move.player === "white" ? "White" : "Black"}:
+                            {reversedMoveHistory.length - i}. {move.player === "white" ? "White" : "Black"}:
                             {move.piece || "♙"}
                             {move.from}-{move.to}
                         </div>
