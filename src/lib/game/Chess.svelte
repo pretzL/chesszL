@@ -3,9 +3,9 @@
     import { ChessAI } from "./aiModule.js";
     import { ChessGameClient } from "../client/chessGameClient.js";
     import { storage } from "$lib/utils/storage";
+    import Modal from "$lib/components/Modal.svelte";
     import { browser } from "$app/environment";
     import { onDestroy } from "svelte";
-    import { backIn } from "svelte/easing";
 
     let theme = $state(storage.get("chess-theme", "light"));
 
@@ -16,6 +16,7 @@
     let gameClient = $state(null);
     let playerColor = $state(null);
     let opponent = $state(null);
+    let gameResult = $state(null);
 
     // AI mode states
     let engine = $state(new ChessEngine());
@@ -30,6 +31,9 @@
     let promotionPending = $state(null);
     let statusMessage = $state("White's turn");
     let isAIThinking = $state(false);
+    let drawOffer = $state(null); // { offeredBy: 'white' | 'black' }
+    let drawOfferTimeout = $state(null);
+    let showResignModal = $state(false);
 
     function toggleTheme() {
         theme = theme === "light" ? "dark" : "light";
@@ -187,6 +191,60 @@
         }
     }
 
+    function handleDrawOffered(offeredBy) {
+        drawOffer = { offeredBy };
+
+        // Start a countdown timer for the draw offer
+        if (drawOfferTimeout) {
+            clearInterval(drawOfferTimeout);
+        }
+
+        let timeLeft = 30;
+        drawOfferTimeout = setInterval(() => {
+            timeLeft--;
+            if (timeLeft <= 0) {
+                clearInterval(drawOfferTimeout);
+                drawOfferTimeout = null;
+                drawOffer = null;
+            }
+        }, 1000);
+    }
+
+    function handleDrawCancelled() {
+        if (drawOfferTimeout) {
+            clearInterval(drawOfferTimeout);
+            drawOfferTimeout = null;
+        }
+        drawOffer = null;
+    }
+
+    function handleDrawResponse(accepted) {
+        if (gameClient) {
+            gameClient.respondToDraw(accepted);
+            handleDrawCancelled();
+        }
+    }
+
+    function handleResignClick() {
+        showResignModal = true;
+    }
+
+    function confirmResign() {
+        showResignModal = false;
+
+        if (gameMode === "multiplayer" && gameClient) {
+            gameClient.resign();
+        } else if (gameMode === "ai") {
+            const winner = "black";
+            gameStatus = "ended";
+            gameResult = {
+                winner,
+                reason: `White resigned. Black wins!`
+            };
+            statusMessage = gameResult.reason;
+        }
+    }
+
     function switchGameMode(mode) {
         gameMode = mode;
         resetGame();
@@ -220,14 +278,18 @@
 
     function resetGame() {
         engine = new ChessEngine();
-        ai = new ChessAI(engine, difficulty);
         currentPlayer = "white";
         selectedPiece = null;
         moveHistory = [];
         gameStatus = "active";
         promotionPending = null;
         statusMessage = "White's turn";
-        isAIThinking = false;
+        gameResult = null;
+
+        if (gameMode === "ai") {
+            isAIThinking = false;
+            ai = new ChessAI(engine, difficulty);
+        }
     }
 
     // WebSockets functions
@@ -273,6 +335,21 @@
     function handleGameEnd(reason) {
         gameStatus = "ended";
         statusMessage = reason;
+        
+        if (reason.includes("resigned")) {
+            const winner = reason.includes("white wins") ? "white" : "black";
+            gameResult = { 
+                winner,
+                reason
+            };
+        }
+        
+        if (gameMode === "multiplayer") {
+            opponent = null;
+            playerColor = null;
+        } else if (gameMode === "ai") {
+            isAIThinking = false;
+        }
     }
 
     async function joinLobby() {
@@ -295,6 +372,8 @@
                     },
                     onGameStart: handleGameStart,
                     onGameUpdate: handleGameUpdate,
+                    onDrawOffered: handleDrawOffered,
+                    onDrawCancelled: handleDrawCancelled,
                     onGameEnd: handleGameEnd,
                     onError: (error) => {
                         console.error("WebSocket error:", error);
@@ -341,14 +420,91 @@
         }
     });
 
+    let showGameResultModal = $state(false);
+    $effect(() => {
+        if (gameStatus === "ended" && gameResult) {
+            showGameResultModal = true;
+        }
+    })
+
     onDestroy(() => {
         if (gameClient) {
             gameClient.disconnect();
+        }
+        if (drawOfferTimeout) {
+            clearInterval(drawOfferTimeout);
         }
     });
 
     updateGameStatus();
 </script>
+
+{#snippet resignModalContent()}
+<div class="resign-modal-content">
+    <p>Are you sure you want to resign this game? This action cannot be undone.</p>
+    <div class="modal-buttons">
+        <button
+            class="ui-button confirm-resign"
+            onclick={confirmResign}
+        >
+            Yes, Resign
+        </button>
+        <button
+            class="ui-button cancel-resign"
+            onclick={() => (showResignModal = false)}
+        >
+            Cancel
+        </button>
+    </div>
+</div>
+{/snippet}
+
+<Modal
+    bind:showModal={showResignModal}
+    title="Confirm Resignation"
+    content={resignModalContent}
+>
+</Modal>
+
+{#snippet gameResultModalContent()}
+<div class="game-end-modal-content">
+    <p>{gameResult.reason}</p>
+    <div class="modal-buttons">
+        <button 
+            class="ui-button new-game"
+            onclick={() => {
+                gameStatus = "active";
+                gameResult = null;
+                resetGame();
+            }}
+        >
+            New Game
+        </button>
+        <button 
+            class="ui-button return-lobby"
+            onclick={() => {
+                gameMode = null;
+                gameStatus = "active";
+                gameResult = null;
+                opponent = null;
+                playerColor = null;
+                resetGame();
+            }}
+        >
+            Return to Lobby
+        </button>
+    </div>
+</div>
+{/snippet}
+
+{#if gameStatus === "ended" && gameResult}
+    <Modal 
+        bind:showModal={showGameResultModal}
+        title="Game Over"
+        content={gameResultModalContent}
+    >
+    </Modal>
+{/if}
 
 <div class="game">
     <button
@@ -487,19 +643,45 @@
                     New Game
                 </button>
 
+                <button
+                    class="ui-button resign-button"
+                    onclick={handleResignClick}
+                >
+                    Resign
+                </button>
+
                 {#if gameMode === "multiplayer"}
-                    <button
-                        class="ui-button resign-button"
-                        onclick={() => gameClient.resign()}
-                    >
-                        Resign
-                    </button>
-                    <button
-                        class="ui-button draw-button"
-                        onclick={() => gameClient.offerDraw()}
-                    >
-                        Offer Draw
-                    </button>
+                    {#if drawOffer}
+                        {#if (drawOffer.offeredBy === "white" && playerColor === "black") || (drawOffer.offeredBy === "black" && playerColor === "white")}
+                            <div class="draw-offer">
+                                <span>Draw offered by opponent</span>
+                                <button
+                                    class="ui-button accept-draw"
+                                    onclick={() => handleDrawResponse(true)}
+                                >
+                                    Accept Draw
+                                </button>
+                                <button
+                                    class="ui-button decline-draw"
+                                    onclick={() => handleDrawResponse(false)}
+                                >
+                                    Decline
+                                </button>
+                            </div>
+                        {:else}
+                            <div class="draw-offer">
+                                <span>Draw offer pending...</span>
+                            </div>
+                        {/if}
+                    {:else}
+                        <button
+                            class="ui-button draw-button"
+                            onclick={() => gameClient.offerDraw()}
+                            disabled={currentPlayer !== playerColor}
+                        >
+                            Offer Draw
+                        </button>
+                    {/if}
                 {/if}
             </div>
         </div>
@@ -866,6 +1048,67 @@
         font-style: italic;
         color: var(--text-secondary);
         font-size: 0.9em;
+    }
+
+    .draw-offer {
+        display: flex;
+        align-items: center;
+        gap: $spacing-sm;
+
+        span {
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+    }
+
+    .accept-draw {
+        background-color: var(--success);
+        color: white;
+        transition: filter 0.2s ease;
+
+        &:hover {
+            filter: brightness(0.9);
+        }
+    }
+
+    .decline-draw {
+        background-color: var(--error);
+        color: white;
+        transition: filter 0.2s ease;
+
+        &:hover {
+            filter: brightness(0.9);
+        }
+    }
+
+    .resign-modal-content {
+        p {
+            color: var(--text-secondary);
+        }
+    }
+
+    .modal-buttons {
+        display: flex;
+        gap: $spacing-md;
+        justify-content: flex-end;
+        margin-top: $spacing-md;
+    }
+
+    .confirm-resign {
+        background-color: var(--error);
+        color: white;
+
+        &:hover {
+            filter: brightness(0.9);
+        }
+    }
+
+    .cancel-resign {
+        background-color: var(--bg-secondary);
+
+        &:hover {
+            filter: brightness(0.9);
+        }
     }
 
     @media (max-width: $breakpoint-md) {

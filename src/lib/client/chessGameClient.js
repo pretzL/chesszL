@@ -7,6 +7,8 @@ export class ChessGameClient {
             onGameStart: null,
             onGameUpdate: null,
             onGameEnd: null,
+            onDrawOffered: null,
+            onDrawCancelled: null,
             onError: null,
         };
     }
@@ -69,6 +71,18 @@ export class ChessGameClient {
                 }
                 break;
 
+            case "draw_offered":
+                if (this.callbacks.onDrawOffered) {
+                    this.callbacks.onDrawOffered(data.offeredBy);
+                }
+                break;
+
+            case "draw_cancelled":
+                if (this.callbacks.onDrawCancelled) {
+                    this.callbacks.onDrawCancelled();
+                }
+                break;
+
             case "game_ended":
                 if (this.callbacks.onGameEnd) {
                     this.callbacks.onGameEnd(data.reason);
@@ -119,7 +133,20 @@ export class ChessGameClient {
         });
     }
 
+    respondToDraw(accepted) {
+        this.send({
+            type: "respond_to_draw",
+            gameId: this.gameId,
+            accepted,
+        });
+    }
+
     resign() {
+        if (!this.gameId) {
+            console.error("Cannot resign - no active game");
+            return;
+        }
+
         this.send({
             type: "resign",
             gameId: this.gameId,

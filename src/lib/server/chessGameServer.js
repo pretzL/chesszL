@@ -49,6 +49,9 @@ class ChessGameServer {
             case "offer_draw":
                 this.handleDrawOffer(userId, data.gameId);
                 break;
+            case "respond_to_draw":
+                this.handleDrawResponse(userId, data.gameId, data.accepted);
+                break;
             case "resign":
                 this.handleResign(userId, data.gameId);
                 break;
@@ -77,11 +80,12 @@ class ChessGameServer {
             black: null,
             spectators: [],
             gameState: {
-                board: null, // Initial board state
+                board: null,
                 currentPlayer: "white",
                 moveHistory: [],
                 status: "waiting",
             },
+            drawOffer: null,
         });
 
         player.status = "playing";
@@ -145,6 +149,10 @@ class ChessGameServer {
         )
             return;
 
+        if (game.drawOffer) {
+            this.cancelDrawOffer(gameId);
+        }
+
         // Update game state
         game.gameState.board = move.newBoard;
         game.gameState.currentPlayer = game.gameState.currentPlayer === "white" ? "black" : "white";
@@ -152,6 +160,111 @@ class ChessGameServer {
 
         // Broadcast move to all players and spectators
         this.broadcastGameState(gameId);
+    }
+
+    handleDrawOffer(userId, gameId) {
+        const game = this.games.get(gameId);
+        if (!game) return;
+
+        // Verify the player is in this game
+        const isWhite = game.white.userId === userId;
+        const isBlack = game.black.userId === userId;
+        if (!isWhite && !isBlack) return;
+
+        // Check if there's already a pending draw offer
+        if (game.drawOffer) {
+            return;
+        }
+
+        // Record the draw offer
+        game.drawOffer = {
+            offeredBy: userId,
+            timestamp: Date.now(),
+        };
+
+        // Notify both players
+        const message = JSON.stringify({
+            type: "draw_offered",
+            offeredBy: isWhite ? "white" : "black",
+        });
+
+        const whitePlayer = this.lobby.get(game.white.userId);
+        const blackPlayer = this.lobby.get(game.black.userId);
+
+        if (whitePlayer) whitePlayer.ws.send(message);
+        if (blackPlayer) blackPlayer.ws.send(message);
+
+        // Also notify spectators
+        game.spectators.forEach((spectatorId) => {
+            const spectator = this.lobby.get(spectatorId);
+            if (spectator) spectator.ws.send(message);
+        });
+
+        // Set a timeout to automatically cancel the draw offer after 30 seconds
+        setTimeout(() => {
+            if (game.drawOffer && game.drawOffer.offeredBy === userId) {
+                this.cancelDrawOffer(gameId);
+            }
+        }, 30000);
+    }
+
+    handleDrawResponse(userId, gameId, accepted) {
+        const game = this.games.get(gameId);
+        if (!game || !game.drawOffer) return;
+
+        // Verify the responding player is in this game and is not the one who offered
+        const isWhite = game.white.userId === userId;
+        const isBlack = game.black.userId === userId;
+        if (!isWhite && !isBlack) return;
+        if (game.drawOffer.offeredBy === userId) return;
+
+        if (accepted) {
+            // End the game in a draw
+            this.handleGameEnd(gameId, "Game drawn by mutual agreement");
+        } else {
+            // Cancel the draw offer
+            this.cancelDrawOffer(gameId);
+        }
+    }
+
+    cancelDrawOffer(gameId) {
+        const game = this.games.get(gameId);
+        if (!game || !game.drawOffer) return;
+
+        game.drawOffer = null;
+
+        // Notify both players
+        const message = JSON.stringify({
+            type: "draw_cancelled",
+        });
+
+        const whitePlayer = this.lobby.get(game.white.userId);
+        const blackPlayer = this.lobby.get(game.black.userId);
+
+        if (whitePlayer) whitePlayer.ws.send(message);
+        if (blackPlayer) blackPlayer.ws.send(message);
+
+        // Also notify spectators
+        game.spectators.forEach((spectatorId) => {
+            const spectator = this.lobby.get(spectatorId);
+            if (spectator) spectator.ws.send(message);
+        });
+    }
+
+    handleResign(userId, gameId) {
+        const game = this.games.get(gameId);
+        if (!game) return;
+
+        // Check if the resigning player is in this game
+        const isWhite = game.white.userId === userId;
+        const isBlack = game.black.userId === userId;
+
+        if (!isWhite && !isBlack) return;
+
+        const winner = isWhite ? "black" : "white";
+        const resigningUsername = isWhite ? game.white.username : game.black.username;
+
+        this.handleGameEnd(gameId, `${resigningUsername} resigned. ${winner} wins!`);
     }
 
     handleDisconnect(userId) {
