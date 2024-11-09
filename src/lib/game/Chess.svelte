@@ -35,6 +35,9 @@
     let drawOffer = $state(null); // { offeredBy: 'white' | 'black' }
     let drawOfferTimeout = $state(null);
     let showResignModal = $state(false);
+    let lastMove = $state(null);
+    let showLastMove = $state(false);
+    let movingPiece = $state(null);
 
     function toggleTheme() {
         theme = theme === "light" ? "dark" : "light";
@@ -99,98 +102,144 @@
         finishMove();
     }
 
+    function calculatePiecePosition(fromRow, fromCol, toRow, toCol, progress) {
+        const startX = fromCol * (100 / 8);
+        const startY = fromRow * (100 / 8);
+        const endX = toCol * (100 / 8);
+        const endY = toRow * (100 / 8);
+        
+        const currentX = startX + (endX - startX) * progress;
+        const currentY = startY + (endY - startY) * progress;
+        
+        return { x: currentX, y: currentY };
+    }
+
     async function makeAIMove() {
-        if (currentPlayer === "black" && !promotionPending && (gameStatus === "active" || gameStatus === "check")) {
-            isAIThinking = true;
+    if (currentPlayer === "black" && !promotionPending && (gameStatus === "active" || gameStatus === "check")) {
+        isAIThinking = true;
 
-            try {
-                await new Promise((resolve) => setTimeout(resolve, 1000));
-                const move = ai.getBestMove();
+        try {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+            const move = ai.getBestMove();
 
-                if (move) {
-                    const result = engine.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
-                    engine = new ChessEngine(result.board);
+            if (move) {
+                const piece = engine.board[move.fromRow][move.fromCol].piece;
+                
+                movingPiece = {
+                    piece,
+                    fromRow: move.fromRow,
+                    fromCol: move.fromCol,
+                    toRow: move.toRow,
+                    toCol: move.toCol
+                };
 
-                    updateMoveHistory(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                await new Promise(resolve => setTimeout(resolve, 300));
 
-                    if (result.needsPromotion) {
-                        const promotionPiece = "♛"; // Black queen
-                        handlePromotion(promotionPiece);
-                    } else {
-                        finishMove();
-                    }
+                const result = engine.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                movingPiece = null;
+                lastMove = { 
+                    fromRow: move.fromRow, 
+                    fromCol: move.fromCol, 
+                    toRow: move.toRow, 
+                    toCol: move.toCol 
+                };
 
-                    ai = new ChessAI(engine);
+                engine = new ChessEngine(result.board);
+                updateMoveHistory(move.fromRow, move.fromCol, move.toRow, move.toCol);
+
+                if (result.needsPromotion) {
+                    const promotionPiece = "♛"; // Black queen
+                    handlePromotion(promotionPiece);
                 } else {
-                    gameStatus = engine.isInCheck("black") ? "checkmate" : "stalemate";
-                    updateGameStatus();
+                    finishMove();
                 }
-            } catch (error) {
-                gameStatus = "checkmate";
-                console.error("Error making AI move:", error);
+
+                ai = new ChessAI(engine);
+            } else {
+                gameStatus = engine.isInCheck("black") ? "checkmate" : "stalemate";
                 updateGameStatus();
-            } finally {
-                isAIThinking = false;
             }
+        } catch (error) {
+            gameStatus = "checkmate";
+            console.error("Error making AI move:", error);
+            updateGameStatus();
+        } finally {
+            isAIThinking = false;
         }
     }
+}
 
     async function handleSquareClick(row, col) {
-        if (
-            promotionPending ||
-            (gameMode === "ai" && isAIThinking) ||
-            (gameStatus !== "active" && gameStatus !== "check")
-        )
-            return;
+    if (
+        promotionPending ||
+        (gameMode === "ai" && isAIThinking) ||
+        (gameStatus !== "active" && gameStatus !== "check") ||
+        movingPiece
+    )
+        return;
 
-        if (gameMode === "multiplayer" && currentPlayer !== playerColor) return;
+    if (gameMode === "multiplayer" && currentPlayer !== playerColor) return;
 
-        const square = engine.board[row][col];
+    const square = engine.board[row][col];
 
-        if (selectedPiece) {
-            const [selectedRow, selectedCol] = selectedPiece;
+    if (selectedPiece) {
+        const [selectedRow, selectedCol] = selectedPiece;
 
-            if (engine.isValidMove(selectedRow, selectedCol, row, col, currentPlayer)) {
-                try {
-                    const movingPiece = engine.board[selectedRow][selectedCol].piece;
-                    const result = engine.makeMove(selectedRow, selectedCol, row, col);
+        if (engine.isValidMove(selectedRow, selectedCol, row, col, currentPlayer)) {
+            try {
+                const piece = engine.board[selectedRow][selectedCol].piece;
+                
+                movingPiece = {
+                    piece,
+                    fromRow: selectedRow,
+                    fromCol: selectedCol,
+                    toRow: row,
+                    toCol: col
+                };
 
-                    if (gameMode === "multiplayer") {
-                        gameClient.makeMove({
-                            fromRow: selectedRow,
-                            fromCol: selectedCol,
-                            toRow: row,
-                            toCol: col,
-                            newBoard: result.board,
-                            piece: movingPiece,
-                        });
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                const result = engine.makeMove(selectedRow, selectedCol, row, col);
+                movingPiece = null;
+                lastMove = { fromRow: selectedRow, fromCol: selectedCol, toRow: row, toCol: col };
 
-                        selectedPiece = null;
+                if (gameMode === "multiplayer") {
+                    gameClient.makeMove({
+                        fromRow: selectedRow,
+                        fromCol: selectedCol,
+                        toRow: row,
+                        toCol: col,
+                        newBoard: result.board,
+                        piece: piece,
+                    });
+
+                    selectedPiece = null;
+                } else {
+                    engine = new ChessEngine(result.board);
+                    updateMoveHistory(selectedRow, selectedCol, row, col);
+
+                    if (result.needsPromotion) {
+                        promotionPending = result.promotionData;
+                        updateGameStatus();
                     } else {
-                        engine = new ChessEngine(result.board);
-                        updateMoveHistory(selectedRow, selectedCol, row, col);
-
-                        if (result.needsPromotion) {
-                            promotionPending = result.promotionData;
-                            updateGameStatus();
-                        } else {
-                            finishMove();
-                            if (gameMode === "ai") {
-                                ai = new ChessAI(engine, difficulty);
-                            }
+                        finishMove();
+                        if (gameMode === "ai") {
+                            ai = new ChessAI(engine, difficulty);
                         }
                     }
-                } catch (error) {
-                    console.error("Error making move:", error);
-                    selectedPiece = null;
                 }
-            } else {
+            } catch (error) {
+                console.error("Error making move:", error);
                 selectedPiece = null;
+                movingPiece = null;
             }
-        } else if (square.color === currentPlayer) {
-            selectedPiece = [row, col];
+        } else {
+            selectedPiece = null;
         }
+    } else if (square.color === currentPlayer) {
+        selectedPiece = [row, col];
     }
+}
 
     function handleDrawOffered(offeredBy) {
         drawOffer = { offeredBy };
@@ -637,6 +686,13 @@
                     </div>
                 {/if}
 
+                <button 
+                    class="ui-button toggle-last-move"
+                    onclick={() => showLastMove = !showLastMove}
+                >
+                    {showLastMove ? 'Hide' : 'Show'} Last Move
+                </button>
+
                 <button
                     class="ui-button new-game-button"
                     onclick={resetGame}
@@ -711,12 +767,14 @@
                     {#each row as square, colIndex}
                         {@const isSelected = isSquareSelected(rowIndex, colIndex)}
                         {@const isValidTarget = isValidMoveTarget(rowIndex, colIndex)}
-                        {@const isLastMoveTile = isLastMove(rowIndex, colIndex)}
+                        {@const isFromSquare = showLastMove && lastMove && lastMove.fromRow === rowIndex && lastMove.fromCol === colIndex}
+                        {@const isToSquare = showLastMove && lastMove && lastMove.toRow === rowIndex && lastMove.toCol === colIndex}
                         <div
                             class="square {getSquareColor(rowIndex, colIndex)}"
                             class:selected={isSelected}
                             class:valid-move={isValidTarget}
-                            class:last-move={isLastMoveTile}
+                            class:move-from={isFromSquare}
+                            class:move-to={isToSquare}
                             onclick={() => handleSquareClick(rowIndex, colIndex)}
                             onkeypress={(e) => {
                                 if (e.key === "Enter") handleSquareClick(rowIndex, colIndex);
@@ -724,10 +782,22 @@
                             tabindex="0"
                             role="button"
                         >
-                            {square.piece}
+                            {#if !(movingPiece && rowIndex === movingPiece.fromRow && colIndex === movingPiece.fromCol)}
+                                {square.piece}
+                            {/if}
                         </div>
                     {/each}
                 {/each}
+                
+                {#if movingPiece}
+                    <div 
+                        class="moving-piece"
+                        style="--start-row: {movingPiece.fromRow}; --start-col: {movingPiece.fromCol}; 
+                               --end-row: {movingPiece.toRow}; --end-col: {movingPiece.toCol};"
+                    >
+                        {movingPiece.piece}
+                    </div>
+                {/if}
             </div>
 
             <div class="move-history">
@@ -827,6 +897,7 @@
         display: grid;
         grid-template-columns: repeat(8, 1fr);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        position: relative;
     }
 
     .square {
@@ -860,6 +931,14 @@
 
         &:hover {
             filter: brightness(1.1);
+        }
+
+        &.move-from {
+            background-color: var(--highlight-from);
+        }
+
+        &.move-to {
+            background-color: var(--highlight-to);
         }
     }
 
@@ -1107,6 +1186,42 @@
     .cancel-resign {
         background-color: var(--bg-secondary);
 
+        &:hover {
+            filter: brightness(0.9);
+        }
+    }
+
+    .moving-piece {
+        position: absolute;
+        font-size: 2em;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: calc(100% / 8);
+        height: calc(100% / 8);
+        pointer-events: none;
+        z-index: 10;
+        animation: movePiece 300ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    }
+
+    @keyframes movePiece {
+        0% {
+            transform: translate(
+                calc(var(--start-col) * 100%),
+                calc(var(--start-row) * 100%)
+            );
+        }
+        100% {
+            transform: translate(
+                calc(var(--end-col) * 100%),
+                calc(var(--end-row) * 100%)
+            );
+        }
+    }
+
+    .toggle-last-move {
+        background-color: var(--bg-secondary);
+        
         &:hover {
             filter: brightness(0.9);
         }
