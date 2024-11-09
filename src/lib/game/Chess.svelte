@@ -460,6 +460,12 @@
         }
     }
 
+    function deleteGame(gameId) {
+        if (gameClient) {
+            gameClient.deleteGame(gameId);
+        }
+    }
+
     function startGame() {
         engine = new ChessEngine();
         currentPlayer = "white";
@@ -672,6 +678,9 @@
                     <button
                         class="ui-button create-game"
                         onclick={createGame}
+                        disabled={availableGames.some(game => 
+                            game.white === username || game.black === username
+                        )}
                     >
                         Create New Game
                     </button>
@@ -680,7 +689,7 @@
                             {#if game.status === "waiting"}
                                 <li class="player-item">
                                     {game.white} vs {game.black}
-                                    {#if game.white !== username}
+                                    {#if game.white !== username && game.black !== username}
                                         <button
                                             class="ui-button join-game"
                                             onclick={() => joinGame(game.gameId)}
@@ -688,7 +697,15 @@
                                             Join
                                         </button>
                                     {:else}
-                                        <span class="inline-badge your-game">Your game</span>
+                                        <div class="game-actions">
+                                            <span class="inline-badge your-game">Your game</span>
+                                            <button
+                                                class="ui-button delete-game"
+                                                onclick={() => deleteGame(game.gameId)}
+                                            >
+                                                x
+                                            </button>
+                                        </div>
                                     {/if}
                                 </li>
                             {/if}
@@ -1224,9 +1241,34 @@
         }
     }
 
+    .game-actions {
+        display: flex;
+        align-items: center;
+        gap: $spacing-sm;
+    }
+
+    .delete-game {
+        padding: $spacing-sm;
+        font-size: 0.9em;
+        border: none;
+        background-color: transparent;
+
+        &:hover {
+            filter: brightness(0.9);
+        }
+    }
+
     .create-game {
         width: 100%;
         margin-bottom: $spacing-md;
+        &:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            
+            &:hover {
+                background-color: var(--button-bg);
+            }
+        }
     }
 
     .your-game {

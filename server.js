@@ -145,6 +145,19 @@ wss.on("connection", (ws) => {
                         if (blackPlayerWs) blackPlayerWs.send(gameUpdate);
                     }
                     break;
+                case "delete_game": {
+                    const game = games.get(data.gameId);
+                    const client = clients.get(userId);
+
+                    if (game && client && (game.white?.userId === userId || game.black?.userId === userId)) {
+                        games.delete(data.gameId);
+
+                        client.status = "available";
+
+                        broadcastLobbyState();
+                    }
+                    break;
+                }
             }
         } catch (error) {
             console.error("Error handling message:", error);
@@ -169,7 +182,7 @@ function broadcastLobbyState() {
 
     const gamesList = Array.from(games.entries()).map(([id, game]) => ({
         gameId: id,
-        white: game.white.username,
+        white: game.white?.username || "Waiting...",
         black: game.black?.username || "Waiting...",
         status: game.gameState.status,
     }));

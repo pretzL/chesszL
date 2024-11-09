@@ -112,6 +112,13 @@ export class ChessGameClient {
         });
     }
 
+    deleteGame(gameId) {
+        this.send({
+            type: "delete_game",
+            gameId,
+        });
+    }
+
     makeMove(move) {
         this.send({
             type: "make_move",

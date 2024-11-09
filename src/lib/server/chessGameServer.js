@@ -43,6 +43,9 @@ class ChessGameServer {
             case "spectate_game":
                 this.handleSpectateGame(userId, data.gameId);
                 break;
+            case "delete_game":
+                this.handleDeleteGame(userId, data.gameId);
+                break;
             case "make_move":
                 this.handleMove(userId, data.gameId, data.move);
                 break;
@@ -143,6 +146,20 @@ class ChessGameServer {
                 opponent: otherPlayer.username,
             })
         );
+
+        this.broadcastLobbyState();
+    }
+
+    handleDeleteGame(userId, gameId) {
+        const game = this.games.get(gameId);
+        if (!game) return;
+
+        this.games.delete(gameId);
+
+        const player = this.lobby.get(userId);
+        if (player && player.status === "playing") {
+            player.status = "available";
+        }
 
         this.broadcastLobbyState();
     }
