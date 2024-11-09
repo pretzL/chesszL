@@ -3,7 +3,7 @@
     import { ChessAI } from "./aiModule.js";
     import { ChessGameClient } from "../client/chessGameClient.js";
     import { storage } from "$lib/utils/storage";
-    import Modal from "$lib/components/Modal.svelte";
+    import { Modal } from "$components";
     import { browser } from "$app/environment";
     import { onDestroy } from "svelte";
 
@@ -39,6 +39,7 @@
     let lastMove = $state(null);
     let showLastMove = $state(false);
     let movingPiece = $state(null);
+    let localGameRotation = $state(false);
 
     function toggleTheme() {
         theme = theme === "light" ? "dark" : "light";
@@ -88,6 +89,10 @@
         gameStatus = newStatus;
         currentPlayer = nextPlayer;
         selectedPiece = null;
+
+        if (gameMode === "local") {
+            localGameRotation = !localGameRotation;
+        }
 
         updateGameStatus();
     }
@@ -171,76 +176,76 @@
 }
 
     async function handleSquareClick(row, col) {
-    if (
-        promotionPending ||
-        (gameMode === "ai" && isAIThinking) ||
-        (gameStatus !== "active" && gameStatus !== "check") ||
-        movingPiece
-    )
-        return;
+        if (
+            promotionPending ||
+            (gameMode === "ai" && isAIThinking) ||
+            (gameStatus !== "active" && gameStatus !== "check") ||
+            movingPiece
+        )
+            return;
 
-    if (gameMode === "multiplayer" && currentPlayer !== playerColor) return;
+        if (gameMode === "multiplayer" && currentPlayer !== playerColor) return;
 
-    const square = engine.board[row][col];
+        const square = engine.board[row][col];
 
-    if (selectedPiece) {
-        const [selectedRow, selectedCol] = selectedPiece;
+        if (selectedPiece) {
+            const [selectedRow, selectedCol] = selectedPiece;
 
-        if (engine.isValidMove(selectedRow, selectedCol, row, col, currentPlayer)) {
-            try {
-                const piece = engine.board[selectedRow][selectedCol].piece;
-                
-                movingPiece = {
-                    piece,
-                    fromRow: selectedRow,
-                    fromCol: selectedCol,
-                    toRow: row,
-                    toCol: col
-                };
-
-                await new Promise(resolve => setTimeout(resolve, 300));
-                
-                const result = engine.makeMove(selectedRow, selectedCol, row, col);
-                movingPiece = null;
-                lastMove = { fromRow: selectedRow, fromCol: selectedCol, toRow: row, toCol: col };
-
-                if (gameMode === "multiplayer") {
-                    gameClient.makeMove({
+            if (engine.isValidMove(selectedRow, selectedCol, row, col, currentPlayer)) {
+                try {
+                    const piece = engine.board[selectedRow][selectedCol].piece;
+                    
+                    movingPiece = {
+                        piece,
                         fromRow: selectedRow,
                         fromCol: selectedCol,
                         toRow: row,
-                        toCol: col,
-                        newBoard: result.board,
-                        piece: piece,
-                    });
+                        toCol: col
+                    };
 
-                    selectedPiece = null;
-                } else {
-                    engine = new ChessEngine(result.board);
-                    updateMoveHistory(selectedRow, selectedCol, row, col);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    const result = engine.makeMove(selectedRow, selectedCol, row, col);
+                    movingPiece = null;
+                    lastMove = { fromRow: selectedRow, fromCol: selectedCol, toRow: row, toCol: col };
 
-                    if (result.needsPromotion) {
-                        promotionPending = result.promotionData;
-                        updateGameStatus();
+                    if (gameMode === "multiplayer") {
+                        gameClient.makeMove({
+                            fromRow: selectedRow,
+                            fromCol: selectedCol,
+                            toRow: row,
+                            toCol: col,
+                            newBoard: result.board,
+                            piece: piece,
+                        });
+
+                        selectedPiece = null;
                     } else {
-                        finishMove();
-                        if (gameMode === "ai") {
-                            ai = new ChessAI(engine, difficulty, playerColor === "white" ? "black" : "white");
+                        engine = new ChessEngine(result.board);
+                        updateMoveHistory(selectedRow, selectedCol, row, col);
+
+                        if (result.needsPromotion) {
+                            promotionPending = result.promotionData;
+                            updateGameStatus();
+                        } else {
+                            finishMove();
+                            if (gameMode === "ai") {
+                                ai = new ChessAI(engine, difficulty, playerColor === "white" ? "black" : "white");
+                            }
                         }
                     }
+                } catch (error) {
+                    console.error("Error making move:", error);
+                    selectedPiece = null;
+                    movingPiece = null;
                 }
-            } catch (error) {
-                console.error("Error making move:", error);
+            } else {
                 selectedPiece = null;
-                movingPiece = null;
             }
-        } else {
-            selectedPiece = null;
+        } else if (square.color === currentPlayer) {
+            selectedPiece = [row, col];
         }
-    } else if (square.color === currentPlayer) {
-        selectedPiece = [row, col];
     }
-}
 
     function handleDrawOffered(offeredBy) {
         drawOffer = { offeredBy };
@@ -300,6 +305,8 @@
         gameMode = mode;
         if (mode === "ai") {
             startGame();
+        } else if (mode === "local") {
+            startLocalGame();
         } else {
             resetGame();
         }
@@ -311,15 +318,6 @@
 
     function isValidMoveTarget(row, col) {
         return selectedPiece && engine.isValidMove(selectedPiece[0], selectedPiece[1], row, col, currentPlayer);
-    }
-
-    function isLastMove(row, col) {
-        const lastMove = engine.lastMove;
-        return (
-            lastMove &&
-            ((row === lastMove.fromRow && col === lastMove.fromCol) ||
-                (row === lastMove.toRow && col === lastMove.toCol))
-        );
     }
 
     function getSquareColor(row, col) {
@@ -485,6 +483,18 @@
         }
     }
 
+    function startLocalGame() {
+        engine = new ChessEngine();
+        currentPlayer = "white";
+        selectedPiece = null;
+        moveHistory = [];
+        gameStatus = "active";
+        promotionPending = null;
+        statusMessage = "White's turn";
+        gameResult = null;
+        localGameRotation = false;
+    }
+
     // Watch for player moves and respond with AI moves
     $effect(() => {
         if (
@@ -635,7 +645,14 @@
                     class:selected={gameMode === "multiplayer"}
                     onclick={() => switchGameMode("multiplayer")}
                 >
-                    Multiplayer
+                    Online Multiplayer
+                </button>
+                <button
+                    class="ui-button mode-button"
+                    class:selected={gameMode === "local"}
+                    onclick={() => switchGameMode("local")}
+                >
+                    Local Multiplayer
                 </button>
             </div>
         </div>
@@ -735,7 +752,7 @@
                             <option value="hard">Hard</option>
                         </select>
                     </div>
-                {:else}
+                {:else if gameMode === "multiplayer"}
                     <div class="game-info">
                         <p>Playing as: <span class="inline-badge">{playerColor}</span></p>
                         <p>Opponent: <span class="inline-badge">{opponent}</span></p>
@@ -822,7 +839,11 @@
                 <div class="rank-markers">
                     {#each Array(8) as _, index}
                         <div class="rank-marker">
-                            {playerColor === "white" ? 8 - index : index + 1}
+                            {#if gameMode === "local"}
+                                {localGameRotation ? index + 1 : 8 - index}
+                            {:else}
+                                {playerColor === "white" ? 8 - index : index + 1}
+                            {/if}
                         </div>
                     {/each}
                 </div>
@@ -831,8 +852,12 @@
                     <div class="board">
                         {#each engine.board as row, rowIndex}
                             {#each row as square, colIndex}
-                                {@const displayRowIndex = playerColor === "white" ? rowIndex : 7 - rowIndex}
-                                {@const displayColIndex = playerColor === "white" ? colIndex : 7 - colIndex}
+                                {@const displayRowIndex = gameMode === "local" 
+                                    ? (localGameRotation ? 7 - rowIndex : rowIndex)
+                                    : (playerColor === "white" ? rowIndex : 7 - rowIndex)}
+                                {@const displayColIndex = gameMode === "local"
+                                    ? (localGameRotation ? 7 - colIndex : colIndex)
+                                    : (playerColor === "white" ? colIndex : 7 - colIndex)}
                                 {@const isSelected = isSquareSelected(rowIndex, colIndex)}
                                 {@const isValidTarget = isValidMoveTarget(rowIndex, colIndex)}
                                 {@const isFromSquare = showLastMove && lastMove && lastMove.fromRow === rowIndex && lastMove.fromCol === colIndex}
@@ -859,10 +884,18 @@
                         {/each}
                         
                         {#if movingPiece}
-                            {@const displayFromRow = playerColor === "white" ? movingPiece.fromRow : 7 - movingPiece.fromRow}
-                            {@const displayFromCol = playerColor === "white" ? movingPiece.fromCol : 7 - movingPiece.fromCol}
-                            {@const displayToRow = playerColor === "white" ? movingPiece.toRow : 7 - movingPiece.toRow}
-                            {@const displayToCol = playerColor === "white" ? movingPiece.toCol : 7 - movingPiece.toCol}
+                            {@const displayFromRow = gameMode === "local"
+                                ? (localGameRotation ? 7 - movingPiece.fromRow : movingPiece.fromRow)
+                                : (playerColor === "white" ? movingPiece.fromRow : 7 - movingPiece.fromRow)}
+                            {@const displayFromCol = gameMode === "local"
+                                ? (localGameRotation ? 7 - movingPiece.fromCol : movingPiece.fromCol)
+                                : (playerColor === "white" ? movingPiece.fromCol : 7 - movingPiece.fromCol)}
+                            {@const displayToRow = gameMode === "local"
+                                ? (localGameRotation ? 7 - movingPiece.toRow : movingPiece.toRow)
+                                : (playerColor === "white" ? movingPiece.toRow : 7 - movingPiece.toRow)}
+                            {@const displayToCol = gameMode === "local"
+                                ? (localGameRotation ? 7 - movingPiece.toCol : movingPiece.toCol)
+                                : (playerColor === "white" ? movingPiece.toCol : 7 - movingPiece.toCol)}
                             <div 
                                 class="moving-piece"
                                 style="--start-row: {displayFromRow}; --start-col: {displayFromCol}; 
@@ -876,7 +909,11 @@
                     <div class="file-markers">
                         {#each Array(8) as _, index}
                             <div class="file-marker">
-                                {String.fromCharCode(97 + (playerColor === "white" ? index : 7 - index)).toUpperCase()}
+                                {#if gameMode === "local"}
+                                    {String.fromCharCode(97 + (localGameRotation ? 7 - index : index)).toUpperCase()}
+                                {:else}
+                                    {String.fromCharCode(97 + (playerColor === "white" ? index : 7 - index)).toUpperCase()}
+                                {/if}
                             </div>
                         {/each}
                     </div>
@@ -975,6 +1012,7 @@
     .board-container {
         display: flex;
         gap: 4px;
+        transition: transform 0.3s ease;
     }
 
     .board-and-files {
@@ -1016,6 +1054,7 @@
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         position: relative;
         box-sizing: content-box;
+        transition: transform 0.3s ease;
     }
 
     .square {
