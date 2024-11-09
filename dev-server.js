@@ -33,16 +33,17 @@ wss.on("connection", (ws) => {
                     broadcastLobbyState();
                     break;
 
-                case "create_game":
+                case "create_game": {
                     const gameId = nanoid();
                     const client = clients.get(userId);
 
                     if (client) {
                         const initialBoard = getInitialBoard();
+                        const preferredColor = data.preferredColor || "white";
 
                         games.set(gameId, {
-                            white: { userId, username: client.username },
-                            black: null,
+                            white: preferredColor === "white" ? { userId, username: client.username } : null,
+                            black: preferredColor === "black" ? { userId, username: client.username } : null,
                             spectators: [],
                             gameState: {
                                 board: initialBoard,
@@ -57,7 +58,7 @@ wss.on("connection", (ws) => {
                             JSON.stringify({
                                 type: "game_started",
                                 gameId,
-                                color: "white",
+                                color: preferredColor,
                                 gameState: {
                                     board: initialBoard,
                                     currentPlayer: "white",
@@ -70,6 +71,7 @@ wss.on("connection", (ws) => {
                         broadcastLobbyState();
                     }
                     break;
+                }
 
                 case "join_game":
                     const game = games.get(data.gameId);

@@ -98,9 +98,10 @@ export class ChessGameClient {
         });
     }
 
-    createGame() {
+    createGame(preferredColor = "white") {
         this.send({
             type: "create_game",
+            preferredColor,
         });
     }
 

@@ -15,6 +15,7 @@
     let availableGames = $state([]);
     let gameClient = $state(null);
     let playerColor = $state(null);
+    let playerPreferredColor = $state("white");
     let opponent = $state(null);
     let gameResult = $state(null);
 
@@ -115,7 +116,7 @@
     }
 
     async function makeAIMove() {
-    if (currentPlayer === "black" && !promotionPending && (gameStatus === "active" || gameStatus === "check")) {
+    if (!promotionPending && (gameStatus === "active" || gameStatus === "check")) {
         isAIThinking = true;
 
         try {
@@ -148,15 +149,15 @@
                 updateMoveHistory(move.fromRow, move.fromCol, move.toRow, move.toCol);
 
                 if (result.needsPromotion) {
-                    const promotionPiece = "♛"; // Black queen
+                    const promotionPiece = currentPlayer === "white" ? "♕" : "♛";
                     handlePromotion(promotionPiece);
                 } else {
                     finishMove();
                 }
 
-                ai = new ChessAI(engine);
+                ai = new ChessAI(engine, difficulty, playerColor === "white" ? "black" : "white");
             } else {
-                gameStatus = engine.isInCheck("black") ? "checkmate" : "stalemate";
+                gameStatus = engine.isInCheck(currentPlayer) ? "checkmate" : "stalemate";
                 updateGameStatus();
             }
         } catch (error) {
@@ -224,7 +225,7 @@
                     } else {
                         finishMove();
                         if (gameMode === "ai") {
-                            ai = new ChessAI(engine, difficulty);
+                            ai = new ChessAI(engine, difficulty, playerColor === "white" ? "black" : "white");
                         }
                     }
                 }
@@ -297,7 +298,11 @@
 
     function switchGameMode(mode) {
         gameMode = mode;
-        resetGame();
+        if (mode === "ai") {
+            startGame();
+        } else {
+            resetGame();
+        }
     }
 
     function isSquareSelected(row, col) {
@@ -442,7 +447,10 @@
 
     function createGame() {
         if (gameClient) {
-            gameClient.createGame();
+            gameClient.send({
+                type: "create_game",
+                preferredColor: playerPreferredColor
+            });
         }
     }
 
@@ -452,11 +460,30 @@
         }
     }
 
+    function startGame() {
+        engine = new ChessEngine();
+        currentPlayer = "white";
+        selectedPiece = null;
+        moveHistory = [];
+        gameStatus = "active";
+        promotionPending = null;
+        statusMessage = "White's turn";
+        gameResult = null;
+        
+        playerColor = playerPreferredColor;
+        isAIThinking = false;
+        ai = new ChessAI(engine, difficulty, playerColor === "white" ? "black" : "white");
+        
+        if (playerPreferredColor === "black") {
+            makeAIMove();
+        }
+    }
+
     // Watch for player moves and respond with AI moves
     $effect(() => {
         if (
             gameMode === "ai" &&
-            currentPlayer === "black" &&
+            currentPlayer !== playerPreferredColor &&
             !isAIThinking &&
             (gameStatus === "active" || gameStatus === "check")
         ) {
@@ -576,8 +603,19 @@
         </button>
     {/if}
     {#if !gameMode}
-        <div class="mode-select">
-            <h2>Select Game Mode</h2>
+    <div class="mode-select">
+        <h2>Select Game Mode</h2>
+        <div class="game-options">
+            <div class="color-preference">
+                <label for="color-select" class="color-label">Preferred Color:</label>
+                <select 
+                    id="color-select"
+                    bind:value={playerPreferredColor}
+                >
+                    <option value="white">White</option>
+                    <option value="black">Black</option>
+                </select>
+            </div>
             <div class="mode-buttons">
                 <button
                     class="ui-button mode-button"
@@ -595,6 +633,7 @@
                 </button>
             </div>
         </div>
+    </div>
     {:else if gameMode === "multiplayer" && !gameClient}
         <div class="mode-select">
             <h2>Enter Username</h2>
@@ -766,7 +805,7 @@
                 <div class="rank-markers">
                     {#each Array(8) as _, index}
                         <div class="rank-marker">
-                            {8 - index}
+                            {playerColor === "white" ? 8 - index : index + 1}
                         </div>
                     {/each}
                 </div>
@@ -775,12 +814,14 @@
                     <div class="board">
                         {#each engine.board as row, rowIndex}
                             {#each row as square, colIndex}
+                                {@const displayRowIndex = playerColor === "white" ? rowIndex : 7 - rowIndex}
+                                {@const displayColIndex = playerColor === "white" ? colIndex : 7 - colIndex}
                                 {@const isSelected = isSquareSelected(rowIndex, colIndex)}
                                 {@const isValidTarget = isValidMoveTarget(rowIndex, colIndex)}
                                 {@const isFromSquare = showLastMove && lastMove && lastMove.fromRow === rowIndex && lastMove.fromCol === colIndex}
                                 {@const isToSquare = showLastMove && lastMove && lastMove.toRow === rowIndex && lastMove.toCol === colIndex}
                                 <div
-                                    class="square {getSquareColor(rowIndex, colIndex)}"
+                                    class="square {getSquareColor(displayRowIndex, displayColIndex)}"
                                     class:selected={isSelected}
                                     class:valid-move={isValidTarget}
                                     class:move-from={isFromSquare}
@@ -791,6 +832,7 @@
                                     }}
                                     tabindex="0"
                                     role="button"
+                                    style="grid-row: {displayRowIndex + 1}; grid-column: {displayColIndex + 1}"
                                 >
                                     {#if !(movingPiece && rowIndex === movingPiece.fromRow && colIndex === movingPiece.fromCol)}
                                         {square.piece}
@@ -800,10 +842,14 @@
                         {/each}
                         
                         {#if movingPiece}
+                            {@const displayFromRow = playerColor === "white" ? movingPiece.fromRow : 7 - movingPiece.fromRow}
+                            {@const displayFromCol = playerColor === "white" ? movingPiece.fromCol : 7 - movingPiece.fromCol}
+                            {@const displayToRow = playerColor === "white" ? movingPiece.toRow : 7 - movingPiece.toRow}
+                            {@const displayToCol = playerColor === "white" ? movingPiece.toCol : 7 - movingPiece.toCol}
                             <div 
                                 class="moving-piece"
-                                style="--start-row: {movingPiece.fromRow}; --start-col: {movingPiece.fromCol}; 
-                                       --end-row: {movingPiece.toRow}; --end-col: {movingPiece.toCol};"
+                                style="--start-row: {displayFromRow}; --start-col: {displayFromCol}; 
+                                       --end-row: {displayToRow}; --end-col: {displayToCol};"
                             >
                                 {movingPiece.piece}
                             </div>
@@ -813,7 +859,7 @@
                     <div class="file-markers">
                         {#each Array(8) as _, index}
                             <div class="file-marker">
-                                {String.fromCharCode(97 + index).toUpperCase()}
+                                {String.fromCharCode(97 + (playerColor === "white" ? index : 7 - index)).toUpperCase()}
                             </div>
                         {/each}
                     </div>
@@ -943,12 +989,13 @@
     }
 
     .board {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        grid-template-rows: repeat(8, 1fr);
         width: $board-size;
         height: $board-size;
         border: 2px solid var(--border-color);
         border-radius: $border-radius;
-        display: grid;
-        grid-template-columns: repeat(8, 1fr);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         position: relative;
         box-sizing: content-box;
@@ -1049,6 +1096,10 @@
         gap: $spacing-md;
     }
 
+    .color-preference {
+        margin-bottom: $spacing-sm;
+    }
+
     .username-input {
         display: flex;
         margin-top: 1rem;
@@ -1098,15 +1149,15 @@
         left: $spacing-md;
     }
 
+    select {
+        @include button-base;
+        padding: $spacing-sm;
+    }
+
     .difficulty-selector {
         display: flex;
         gap: $spacing-sm;
         align-items: center;
-
-        select {
-            @include button-base;
-            padding: $spacing-sm;
-        }
 
         .difficulty-title {
             text-wrap: nowrap;

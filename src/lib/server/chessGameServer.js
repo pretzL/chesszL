@@ -69,15 +69,15 @@ class ChessGameServer {
         this.broadcastLobbyState();
     }
 
-    handleCreateGame(userId) {
+    handleCreateGame(userId, preferredColor = "white") {
         const gameId = nanoid();
         const player = this.lobby.get(userId);
 
         if (!player) return;
 
         this.games.set(gameId, {
-            white: { userId, username: player.username },
-            black: null,
+            white: preferredColor === "white" ? { userId, username: player.username } : null,
+            black: preferredColor === "black" ? { userId, username: player.username } : null,
             spectators: [],
             gameState: {
                 board: null,
@@ -93,7 +93,7 @@ class ChessGameServer {
             JSON.stringify({
                 type: "game_created",
                 gameId,
-                color: "white",
+                color: preferredColor,
             })
         );
 
@@ -104,16 +104,28 @@ class ChessGameServer {
         const game = this.games.get(gameId);
         const player = this.lobby.get(userId);
 
-        if (!game || !player || game.black) return;
+        if (!game || !player) return;
 
-        game.black = { userId, username: player.username };
+        const joinAsWhite = !game.white;
+        const joinAsBlack = !game.black;
+
+        if (!joinAsWhite && !joinAsBlack) return;
+
+        if (joinAsWhite) {
+            game.white = { userId, username: player.username };
+        } else {
+            game.black = { userId, username: player.username };
+        }
+
         game.gameState.status = "active";
         player.status = "playing";
 
         // Notify both players
-        const whitePlayer = this.lobby.get(game.white.userId);
-        if (whitePlayer) {
-            whitePlayer.ws.send(
+        const otherPlayer = joinAsWhite ? game.black : game.white;
+        const otherPlayerClient = this.lobby.get(otherPlayer.userId);
+
+        if (otherPlayerClient) {
+            otherPlayerClient.ws.send(
                 JSON.stringify({
                     type: "game_started",
                     gameState: game.gameState,
@@ -127,8 +139,8 @@ class ChessGameServer {
                 type: "game_joined",
                 gameId,
                 gameState: game.gameState,
-                color: "black",
-                opponent: game.white.username,
+                color: joinAsWhite ? "white" : "black",
+                opponent: otherPlayer.username,
             })
         );
 

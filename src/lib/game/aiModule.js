@@ -1,9 +1,10 @@
 import { ChessEngine } from "./ChessEngine.js";
 
 export class ChessAI {
-    constructor(engine, difficulty = "medium") {
+    constructor(engine, difficulty = "medium", color = "black") {
         this.engine = engine;
         this.difficulty = difficulty;
+        this.color = color;
         this.maxThinkingTime = 3000;
         this.startTime = 0;
     }
@@ -100,7 +101,8 @@ export class ChessAI {
                     ChessAI.POSITION_BONUSES[pieceType][square.color === "white" ? row : 7 - row][col];
 
                 const value = baseValue + positionBonus;
-                score += square.color === "white" ? value : -value;
+                // Adjust score based on AI's color
+                score += square.color === this.color ? value : -value;
             }
         }
 
@@ -175,7 +177,7 @@ export class ChessAI {
     }
 
     findEscapeFromCheck() {
-        const moves = this.engine.getAllValidMoves("black");
+        const moves = this.engine.getAllValidMoves(this.color);
         const escapeMoves = [];
 
         for (const move of moves) {
@@ -187,7 +189,7 @@ export class ChessAI {
             const engineCopy = new ChessEngine(this.engine.createBoardCopy());
             try {
                 engineCopy.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
-                if (!engineCopy.isInCheck("black")) {
+                if (!engineCopy.isInCheck(this.color)) {
                     escapeMoves.push(move);
                 }
             } catch (error) {
@@ -233,23 +235,21 @@ export class ChessAI {
         this.startTime = Date.now();
 
         try {
-            const moves = this.engine.getAllValidMoves("black");
+            const moves = this.engine.getAllValidMoves(this.color);
 
             if (moves.length === 0) return null;
 
             // If in check, prioritize escaping check
-            if (this.engine.isInCheck("black")) {
+            if (this.engine.isInCheck(this.color)) {
                 const escapeMoves = [];
 
                 for (const move of moves) {
-                    // Test each move in a new engine instance to see if it escapes check
                     const engineCopy = new ChessEngine(this.engine.createBoardCopy());
 
                     try {
                         engineCopy.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
 
-                        if (!engineCopy.isInCheck("black")) {
-                            // For each escape move, calculate a simple material score
+                        if (!engineCopy.isInCheck(this.color)) {
                             const score = this.quickEvaluate(engineCopy.board);
                             escapeMoves.push({ move, score });
                         }
@@ -262,7 +262,6 @@ export class ChessAI {
                 if (escapeMoves.length > 0) {
                     escapeMoves.sort((a, b) => b.score - a.score);
 
-                    // Choose move based on difficulty
                     let chosenMove;
                     if (this.difficulty === "easy") {
                         const randomIndex = Math.floor(Math.random() * escapeMoves.length);
@@ -322,7 +321,7 @@ export class ChessAI {
             console.error("Error in getBestMove:", error);
             // Emergency fallback - make any legal move
             try {
-                const moves = this.engine.getAllValidMoves("black");
+                const moves = this.engine.getAllValidMoves(this.color);
                 if (moves.length > 0) {
                     const randomMove = moves[Math.floor(Math.random() * moves.length)];
                     return randomMove;
@@ -354,7 +353,7 @@ export class ChessAI {
                 if (!pieceType) continue;
 
                 const value = values[pieceType];
-                score += square.color === "white" ? -value : value;
+                score += square.color === this.color ? value : -value;
             }
         }
 
