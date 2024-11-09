@@ -762,42 +762,62 @@
             {#if isAIThinking}
                 <div class="ai-thinking">AI is thinking...</div>
             {/if}
-            <div class="board">
-                {#each engine.board as row, rowIndex}
-                    {#each row as square, colIndex}
-                        {@const isSelected = isSquareSelected(rowIndex, colIndex)}
-                        {@const isValidTarget = isValidMoveTarget(rowIndex, colIndex)}
-                        {@const isFromSquare = showLastMove && lastMove && lastMove.fromRow === rowIndex && lastMove.fromCol === colIndex}
-                        {@const isToSquare = showLastMove && lastMove && lastMove.toRow === rowIndex && lastMove.toCol === colIndex}
-                        <div
-                            class="square {getSquareColor(rowIndex, colIndex)}"
-                            class:selected={isSelected}
-                            class:valid-move={isValidTarget}
-                            class:move-from={isFromSquare}
-                            class:move-to={isToSquare}
-                            onclick={() => handleSquareClick(rowIndex, colIndex)}
-                            onkeypress={(e) => {
-                                if (e.key === "Enter") handleSquareClick(rowIndex, colIndex);
-                            }}
-                            tabindex="0"
-                            role="button"
-                        >
-                            {#if !(movingPiece && rowIndex === movingPiece.fromRow && colIndex === movingPiece.fromCol)}
-                                {square.piece}
-                            {/if}
+            <div class="board-container">
+                <div class="rank-markers">
+                    {#each Array(8) as _, index}
+                        <div class="rank-marker">
+                            {8 - index}
                         </div>
                     {/each}
-                {/each}
-                
-                {#if movingPiece}
-                    <div 
-                        class="moving-piece"
-                        style="--start-row: {movingPiece.fromRow}; --start-col: {movingPiece.fromCol}; 
-                               --end-row: {movingPiece.toRow}; --end-col: {movingPiece.toCol};"
-                    >
-                        {movingPiece.piece}
+                </div>
+            
+                <div class="board-and-files">
+                    <div class="board">
+                        {#each engine.board as row, rowIndex}
+                            {#each row as square, colIndex}
+                                {@const isSelected = isSquareSelected(rowIndex, colIndex)}
+                                {@const isValidTarget = isValidMoveTarget(rowIndex, colIndex)}
+                                {@const isFromSquare = showLastMove && lastMove && lastMove.fromRow === rowIndex && lastMove.fromCol === colIndex}
+                                {@const isToSquare = showLastMove && lastMove && lastMove.toRow === rowIndex && lastMove.toCol === colIndex}
+                                <div
+                                    class="square {getSquareColor(rowIndex, colIndex)}"
+                                    class:selected={isSelected}
+                                    class:valid-move={isValidTarget}
+                                    class:move-from={isFromSquare}
+                                    class:move-to={isToSquare}
+                                    onclick={() => handleSquareClick(rowIndex, colIndex)}
+                                    onkeypress={(e) => {
+                                        if (e.key === "Enter") handleSquareClick(rowIndex, colIndex);
+                                    }}
+                                    tabindex="0"
+                                    role="button"
+                                >
+                                    {#if !(movingPiece && rowIndex === movingPiece.fromRow && colIndex === movingPiece.fromCol)}
+                                        {square.piece}
+                                    {/if}
+                                </div>
+                            {/each}
+                        {/each}
+                        
+                        {#if movingPiece}
+                            <div 
+                                class="moving-piece"
+                                style="--start-row: {movingPiece.fromRow}; --start-col: {movingPiece.fromCol}; 
+                                       --end-row: {movingPiece.toRow}; --end-col: {movingPiece.toCol};"
+                            >
+                                {movingPiece.piece}
+                            </div>
+                        {/if}
                     </div>
-                {/if}
+            
+                    <div class="file-markers">
+                        {#each Array(8) as _, index}
+                            <div class="file-marker">
+                                {String.fromCharCode(97 + index).toUpperCase()}
+                            </div>
+                        {/each}
+                    </div>
+                </div>
             </div>
 
             <div class="move-history">
@@ -889,6 +909,39 @@
         top: -1.5rem;
     }
 
+    .board-container {
+        display: flex;
+        gap: 4px;
+    }
+
+    .board-and-files {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .rank-markers {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-around;
+        padding: 2px 8px;
+    }
+
+    .file-markers {
+        display: flex;
+        justify-content: space-around;
+        padding: 4px 0;
+    }
+
+    .rank-marker, .file-marker {
+        color: var(--text-secondary);
+        font-size: 0.9em;
+        font-family: monospace;
+        width: calc($board-size / 8 - 8px);
+        text-align: center;
+        user-select: none;
+    }
+
     .board {
         width: $board-size;
         height: $board-size;
@@ -898,6 +951,7 @@
         grid-template-columns: repeat(8, 1fr);
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         position: relative;
+        box-sizing: content-box;
     }
 
     .square {
