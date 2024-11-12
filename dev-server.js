@@ -204,6 +204,94 @@ wss.on("connection", (ws) => {
                     }
                     break;
                 }
+
+                case "offer_draw": {
+                    const game = games.get(data.gameId);
+                    const offeringClient = clients.get(userId);
+
+                    if (game && offeringClient) {
+                        const isWhite = game.white?.userId === userId;
+                        const isBlack = game.black?.userId === userId;
+
+                        if (!isWhite && !isBlack) return;
+
+                        if (game.drawOffer) return;
+
+                        game.drawOffer = {
+                            offeredBy: userId,
+                            timestamp: Date.now(),
+                        };
+
+                        const message = JSON.stringify({
+                            type: "draw_offered",
+                            offeredBy: isWhite ? "white" : "black",
+                        });
+
+                        const whitePlayer = clients.get(game.white.userId);
+                        const blackPlayer = clients.get(game.black.userId);
+
+                        if (whitePlayer) whitePlayer.ws.send(message);
+                        if (blackPlayer) blackPlayer.ws.send(message);
+
+                        game.spectators?.forEach((spectatorId) => {
+                            const spectator = clients.get(spectatorId);
+                            if (spectator) {
+                                spectator.ws.send(message);
+                            }
+                        });
+
+                        setTimeout(() => {
+                            if (game.drawOffer && game.drawOffer.offeredBy === userId) {
+                                cancelDrawOffer(game);
+                            }
+                        }, 30000);
+                    }
+                    break;
+                }
+
+                case "respond_to_draw": {
+                    const game = games.get(data.gameId);
+                    const respondingClient = clients.get(userId);
+
+                    if (game && respondingClient && game.drawOffer) {
+                        const isWhite = game.white?.userId === userId;
+                        const isBlack = game.black?.userId === userId;
+
+                        if ((!isWhite && !isBlack) || game.drawOffer.offeredBy === userId) return;
+
+                        if (data.accepted) {
+                            const message = JSON.stringify({
+                                type: "game_ended",
+                                reason: "Game drawn by mutual agreement",
+                            });
+
+                            const whitePlayer = clients.get(game.white.userId);
+                            const blackPlayer = clients.get(game.black.userId);
+
+                            if (whitePlayer) {
+                                whitePlayer.status = "available";
+                                whitePlayer.ws.send(message);
+                            }
+                            if (blackPlayer) {
+                                blackPlayer.status = "available";
+                                blackPlayer.ws.send(message);
+                            }
+
+                            game.spectators?.forEach((spectatorId) => {
+                                const spectator = clients.get(spectatorId);
+                                if (spectator) {
+                                    spectator.ws.send(message);
+                                }
+                            });
+
+                            games.delete(data.gameId);
+                            broadcastLobbyState();
+                        } else {
+                            cancelDrawOffer(game);
+                        }
+                    }
+                    break;
+                }
             }
         } catch (error) {
             console.error("Error handling message:", error);
@@ -286,6 +374,29 @@ function getInitialBoard() {
                     };
                 })
         );
+}
+
+function cancelDrawOffer(game) {
+    if (!game || !game.drawOffer) return;
+
+    game.drawOffer = null;
+
+    const message = JSON.stringify({
+        type: "draw_cancelled",
+    });
+
+    const whitePlayer = clients.get(game.white.userId);
+    const blackPlayer = clients.get(game.black.userId);
+
+    if (whitePlayer) whitePlayer.ws.send(message);
+    if (blackPlayer) blackPlayer.ws.send(message);
+
+    game.spectators?.forEach((spectatorId) => {
+        const spectator = clients.get(spectatorId);
+        if (spectator) {
+            spectator.ws.send(message);
+        }
+    });
 }
 
 const PORT = 3000;
