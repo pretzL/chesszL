@@ -25,7 +25,7 @@ wss.on("connection", (ws) => {
             const data = JSON.parse(message);
 
             switch (data.type) {
-                case "join_lobby":
+                case "join_lobby": {
                     clients.set(userId, {
                         username: data.username,
                         ws,
@@ -34,6 +34,7 @@ wss.on("connection", (ws) => {
 
                     broadcastLobbyState();
                     break;
+                }
 
                 case "create_game": {
                     const gameId = nanoid();
@@ -75,7 +76,7 @@ wss.on("connection", (ws) => {
                     break;
                 }
 
-                case "join_game":
+                case "join_game": {
                     const game = games.get(data.gameId);
                     const joiningClient = clients.get(userId);
 
@@ -115,8 +116,9 @@ wss.on("connection", (ws) => {
                         broadcastLobbyState();
                     }
                     break;
+                }
 
-                case "make_move":
+                case "make_move": {
                     const gameToUpdate = games.get(data.gameId);
                     if (gameToUpdate) {
                         const movingPiece = data.move.piece;
@@ -145,6 +147,8 @@ wss.on("connection", (ws) => {
                         if (blackPlayerWs) blackPlayerWs.send(gameUpdate);
                     }
                     break;
+                }
+
                 case "delete_game": {
                     const game = games.get(data.gameId);
                     const client = clients.get(userId);
@@ -154,6 +158,50 @@ wss.on("connection", (ws) => {
 
                         client.status = "available";
 
+                        broadcastLobbyState();
+                    }
+                    break;
+                }
+
+                case "resign": {
+                    const game = games.get(data.gameId);
+                    const resigningClient = clients.get(userId);
+
+                    if (game && resigningClient) {
+                        const isWhite = game.white?.userId === userId;
+                        const isBlack = game.black?.userId === userId;
+
+                        if (!isWhite && !isBlack) return;
+
+                        const winner = isWhite ? "black" : "white";
+                        const resigningUsername = isWhite ? game.white.username : game.black.username;
+                        const reason = `${resigningUsername} resigned. ${winner} wins!`;
+
+                        const message = JSON.stringify({
+                            type: "game_ended",
+                            reason,
+                        });
+
+                        const whitePlayer = clients.get(game.white.userId);
+                        const blackPlayer = clients.get(game.black.userId);
+
+                        if (whitePlayer) {
+                            whitePlayer.status = "available";
+                            whitePlayer.ws.send(message);
+                        }
+                        if (blackPlayer) {
+                            blackPlayer.status = "available";
+                            blackPlayer.ws.send(message);
+                        }
+
+                        game.spectators?.forEach((spectatorId) => {
+                            const spectator = clients.get(spectatorId);
+                            if (spectator) {
+                                spectator.ws.send(message);
+                            }
+                        });
+
+                        games.delete(data.gameId);
                         broadcastLobbyState();
                     }
                     break;
