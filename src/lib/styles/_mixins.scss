@@ -1,0 +1,21 @@
+@mixin button-base {
+    padding: $spacing-sm $spacing-md;
+    border-radius: $border-radius;
+    border: 1px solid var(--border-color);
+    background-color: var(--button-bg);
+    color: var(--button-text);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+
+    &:hover {
+        background-color: var(--button-hover);
+    }
+}
+
+@mixin card-base {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: $border-radius;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
