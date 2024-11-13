@@ -38,7 +38,9 @@
     let showDrawOfferModal = $state(false);
     let showResignModal = $state(false);
     let lastMove = $state(null);
-    let showLastMove = $state(false);
+    let selectedHistoryMove = $state(null);
+    let showMoveHighlight = $state(false);
+    let ghostPiece = $state(null);
     let movingPiece = $state(null);
     let localGameRotation = $state(false);
     let opponentDisconnected = $state(false);
@@ -166,39 +168,47 @@
     }
 }
 
-    async function handleSquareClick(row, col) {
-        if (
-            promotionPending ||
-            (gameMode === "ai" && isAIThinking) ||
-            (gameStatus !== "active" && gameStatus !== "check") ||
-            movingPiece
-        )
-            return;
+async function handleSquareClick(row, col) {
+    if (
+        promotionPending ||
+        (gameMode === "ai" && isAIThinking) ||
+        (gameStatus !== "active" && gameStatus !== "check") ||
+        movingPiece
+    )
+        return;
 
-        if (gameMode === "multiplayer" && currentPlayer !== playerColor) return;
+    if (gameMode === "multiplayer" && currentPlayer !== playerColor) return;
 
-        const square = engine.board[row][col];
+    const square = engine.board[row][col];
 
-        if (selectedPiece) {
-            const [selectedRow, selectedCol] = selectedPiece;
+    if (selectedPiece) {
+        const [selectedRow, selectedCol] = selectedPiece;
 
-            if (engine.isValidMove(selectedRow, selectedCol, row, col, currentPlayer)) {
-                try {
-                    const piece = engine.board[selectedRow][selectedCol].piece;
-                    
-                    movingPiece = {
-                        piece,
-                        fromRow: selectedRow,
-                        fromCol: selectedCol,
-                        toRow: row,
-                        toCol: col
-                    };
+        if (engine.isValidMove(selectedRow, selectedCol, row, col, currentPlayer)) {
+            try {
+                const piece = engine.board[selectedRow][selectedCol].piece;
+                
+                movingPiece = {
+                    piece,
+                    fromRow: selectedRow,
+                    fromCol: selectedCol,
+                    toRow: row,
+                    toCol: col
+                };
 
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    
-                    const result = engine.makeMove(selectedRow, selectedCol, row, col);
-                    movingPiece = null;
-                    lastMove = { fromRow: selectedRow, fromCol: selectedCol, toRow: row, toCol: col };
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                const result = engine.makeMove(selectedRow, selectedCol, row, col);
+                movingPiece = null;
+                
+                lastMove = { 
+                    fromRow: selectedRow, 
+                    fromCol: selectedCol, 
+                    toRow: row, 
+                    toCol: col,
+                    piece: piece 
+                };
+                selectedHistoryMove = null;
 
                     if (gameMode === "multiplayer") {
                         gameClient.makeMove({
@@ -236,6 +246,32 @@
         } else if (square.color === currentPlayer) {
             selectedPiece = [row, col];
         }
+    }
+
+    function handleHistoryMoveClick(move, index) {
+        // Convert algebraic notation to board coordinates
+        const files = "abcdefgh";
+        const fromCol = files.indexOf(move.from[0]);
+        const fromRow = 8 - parseInt(move.from[1]);
+        const toCol = files.indexOf(move.to[0]);
+        const toRow = 8 - parseInt(move.to[1]);
+
+        selectedHistoryMove = {
+            fromRow,
+            fromCol,
+            toRow,
+            toCol,
+            piece: move.piece,
+            moveNumber: reversedMoveHistory.length - index
+        };
+
+        ghostPiece = {
+            piece: move.piece,
+            fromRow,
+            fromCol,
+            toRow,
+            toCol
+        };
     }
 
     function handleDrawOffered(offeredBy) {
@@ -823,9 +859,9 @@
 
                 <button 
                     class="ui-button toggle-last-move"
-                    onclick={() => showLastMove = !showLastMove}
+                    onclick={() => showMoveHighlight = !showMoveHighlight}
                 >
-                    {showLastMove ? 'Hide' : 'Show'} Last Move
+                    {showMoveHighlight ? 'Hide' : 'Show'} Moves
                 </button>
 
                 <button
@@ -911,14 +947,18 @@
                                     : (playerColor === "white" ? colIndex : 7 - colIndex)}
                                 {@const isSelected = isSquareSelected(rowIndex, colIndex)}
                                 {@const isValidTarget = isValidMoveTarget(rowIndex, colIndex)}
-                                {@const isFromSquare = showLastMove && lastMove && lastMove.fromRow === rowIndex && lastMove.fromCol === colIndex}
-                                {@const isToSquare = showLastMove && lastMove && lastMove.toRow === rowIndex && lastMove.toCol === colIndex}
+                                {@const isLastMove = showMoveHighlight && lastMove && 
+                                    ((lastMove.fromRow === rowIndex && lastMove.fromCol === colIndex) ||
+                                    (lastMove.toRow === rowIndex && lastMove.toCol === colIndex))}
+                                {@const isHistoryMove = selectedHistoryMove && 
+                                    ((selectedHistoryMove.fromRow === rowIndex && selectedHistoryMove.fromCol === colIndex) ||
+                                    (selectedHistoryMove.toRow === rowIndex && selectedHistoryMove.toCol === colIndex))}
                                 <div
                                     class="square {getSquareColor(displayRowIndex, displayColIndex)}"
                                     class:selected={isSelected}
                                     class:valid-move={isValidTarget}
-                                    class:move-from={isFromSquare}
-                                    class:move-to={isToSquare}
+                                    class:last-move={isLastMove}
+                                    class:history-move={isHistoryMove}
                                     onclick={() => handleSquareClick(rowIndex, colIndex)}
                                     onkeypress={(e) => {
                                         if (e.key === "Enter") handleSquareClick(rowIndex, colIndex);
@@ -955,6 +995,21 @@
                                 {movingPiece.piece}
                             </div>
                         {/if}
+
+                        {#if ghostPiece}
+                            {@const displayFromRow = gameMode === "local"
+                                ? (localGameRotation ? 7 - ghostPiece.fromRow : ghostPiece.fromRow)
+                                : (playerColor === "white" ? ghostPiece.fromRow : 7 - ghostPiece.fromRow)}
+                            {@const displayFromCol = gameMode === "local"
+                                ? (localGameRotation ? 7 - ghostPiece.fromCol : ghostPiece.fromCol)
+                                : (playerColor === "white" ? ghostPiece.fromCol : 7 - ghostPiece.fromCol)}
+                            <div 
+                                class="ghost-piece"
+                                style="--row: {displayFromRow}; --col: {displayFromCol}"
+                            >
+                                {ghostPiece.piece}
+                            </div>
+                        {/if}
                     </div>
             
                     <div class="file-markers">
@@ -975,7 +1030,11 @@
                 <h3>Move History</h3>
                 <div class="moves">
                     {#each reversedMoveHistory as move, i}
-                        <div class="move">
+                        <div 
+                            class="move"
+                            class:selected={selectedHistoryMove?.moveNumber === reversedMoveHistory.length - i}
+                            onclick={() => handleHistoryMoveClick(move, i)}
+                        >
                             {reversedMoveHistory.length - i}. {move.player === "white" ? "White" : "Black"}:
                             {move.piece || "♙"}
                             {move.from}-{move.to}
@@ -1148,6 +1207,30 @@
         &.move-to {
             background-color: var(--highlight-to);
         }
+
+        &.last-move {
+            background-color: var(--highlight-last-move);
+        }
+
+        &.history-move {
+            background-color: var(--highlight-history);
+        }
+    }
+
+    .ghost-piece {
+        position: absolute;
+        font-size: 2em;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: calc(100% / 8);
+        height: calc(100% / 8);
+        opacity: 0.5;
+        pointer-events: none;
+        transform: translate(
+            calc(var(--col) * 100%),
+            calc(var(--row) * 100%)
+        );
     }
 
     .promotion-dialog {
@@ -1196,6 +1279,19 @@
         font-family: monospace;
         padding: $spacing-sm 0;
         color: var(--text-secondary);
+        cursor: pointer;
+        padding: $spacing-sm $spacing-md;
+        border-radius: $border-radius;
+        transition: background-color 0.2s ease;
+
+        &:hover {
+            background-color: var(--bg-hover);
+        }
+
+        &.selected {
+            background-color: var(--highlight-selected);
+            color: var(--text-primary);
+        }
     }
 
     .mode-buttons {
