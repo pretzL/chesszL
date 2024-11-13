@@ -88,6 +88,17 @@ export class ChessGameClient {
                     this.callbacks.onGameEnd(data.reason);
                 }
                 break;
+            case "opponent_disconnected":
+                if (this.callbacks.onOpponentDisconnected) {
+                    this.callbacks.onOpponentDisconnected(data.message);
+                }
+                break;
+
+            case "opponent_reconnected":
+                if (this.callbacks.onOpponentReconnected) {
+                    this.callbacks.onOpponentReconnected(data.gameState);
+                }
+                break;
         }
     }
 
@@ -170,7 +181,12 @@ export class ChessGameClient {
     }
 
     setCallbacks(callbacks) {
-        this.callbacks = { ...this.callbacks, ...callbacks };
+        this.callbacks = {
+            ...this.callbacks,
+            ...callbacks,
+            onOpponentDisconnected: callbacks.onOpponentDisconnected || null,
+            onOpponentReconnected: callbacks.onOpponentReconnected || null,
+        };
     }
 
     disconnect() {

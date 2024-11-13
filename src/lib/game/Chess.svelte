@@ -35,11 +35,14 @@
     let isAIThinking = $state(false);
     let drawOffer = $state(null); // { offeredBy: 'white' | 'black' }
     let drawOfferTimeout = $state(null);
+    let showDrawOfferModal = $state(false);
     let showResignModal = $state(false);
     let lastMove = $state(null);
     let showLastMove = $state(false);
     let movingPiece = $state(null);
     let localGameRotation = $state(false);
+    let opponentDisconnected = $state(false);
+    let disconnectionMessage = $state("");
 
     function toggleTheme() {
         theme = theme === "light" ? "dark" : "light";
@@ -106,18 +109,6 @@
 
         promotionPending = null;
         finishMove();
-    }
-
-    function calculatePiecePosition(fromRow, fromCol, toRow, toCol, progress) {
-        const startX = fromCol * (100 / 8);
-        const startY = fromRow * (100 / 8);
-        const endX = toCol * (100 / 8);
-        const endY = toRow * (100 / 8);
-        
-        const currentX = startX + (endX - startX) * progress;
-        const currentY = startY + (endY - startY) * progress;
-        
-        return { x: currentX, y: currentY };
     }
 
     async function makeAIMove() {
@@ -249,8 +240,8 @@
 
     function handleDrawOffered(offeredBy) {
         drawOffer = { offeredBy };
+        showDrawOfferModal = true;
 
-        // Start a countdown timer for the draw offer
         if (drawOfferTimeout) {
             clearInterval(drawOfferTimeout);
         }
@@ -262,6 +253,7 @@
                 clearInterval(drawOfferTimeout);
                 drawOfferTimeout = null;
                 drawOffer = null;
+                showDrawOfferModal = false;
             }
         }, 1000);
     }
@@ -272,6 +264,7 @@
             drawOfferTimeout = null;
         }
         drawOffer = null;
+        showDrawOfferModal = false;
     }
 
     function handleDrawResponse(accepted) {
@@ -345,7 +338,6 @@
         }
     }
 
-    // WebSockets functions
     function handleLobbyUpdate(players, games) {
         lobbyPlayers = players;
         availableGames = games;
@@ -427,6 +419,21 @@
                     onGameUpdate: handleGameUpdate,
                     onDrawOffered: handleDrawOffered,
                     onDrawCancelled: handleDrawCancelled,
+                    onOpponentDisconnected: (message) => {
+                        opponentDisconnected = true;
+                        disconnectionMessage = message;
+                        statusMessage = message;
+                    },
+                    onOpponentReconnected: (gameState) => {
+                        opponentDisconnected = false;
+                        disconnectionMessage = "";
+                        statusMessage = `${currentPlayer}'s turn`;
+                        engine = new ChessEngine(gameState.board);
+                        currentPlayer = gameState.currentPlayer;
+                        if (gameState.moveHistory) {
+                            moveHistory = gameState.moveHistory;
+                        }
+                    },
                     onGameEnd: handleGameEnd,
                     onError: (error) => {
                         console.error("WebSocket error:", error);
@@ -532,21 +539,76 @@
     updateGameStatus();
 </script>
 
+{#snippet drawOfferModalContent()}
+<div class="draw-offer-modal-content">
+    {#if drawOffer && ((drawOffer.offeredBy === "white" && playerColor === "black") || 
+                      (drawOffer.offeredBy === "black" && playerColor === "white"))}
+        <p>Your opponent has offered a draw. Do you accept?</p>
+        <div class="modal-buttons">
+            <button
+                class="ui-button decline-draw"
+                onclick={() => {
+                    handleDrawResponse(false);
+                    showDrawOfferModal = false;
+                }}
+            >
+                Decline
+            </button>
+            <button
+                class="ui-button accept-draw"
+                onclick={() => {
+                    handleDrawResponse(true);
+                    showDrawOfferModal = false;
+                }}
+            >
+                Accept Draw
+            </button>
+        </div>
+    {:else}
+        <p>Are you sure you want to offer a draw to your opponent?</p>
+        <div class="modal-buttons">
+            <button
+                class="ui-button cancel-draw"
+                onclick={() => showDrawOfferModal = false}
+            >
+                Cancel
+            </button>
+            <button
+                class="ui-button confirm-draw"
+                onclick={() => {
+                    gameClient.offerDraw();
+                    showDrawOfferModal = false;
+                }}
+            >
+                Yes, Offer Draw
+            </button>
+        </div>
+    {/if}
+</div>
+{/snippet}
+
+<Modal
+    bind:showModal={showDrawOfferModal}
+    title={drawOffer ? "Draw Offered" : "Offer Draw"}
+    content={drawOfferModalContent}
+>
+</Modal>
+
 {#snippet resignModalContent()}
 <div class="resign-modal-content">
     <p>Are you sure you want to resign this game? This action cannot be undone.</p>
     <div class="modal-buttons">
         <button
+            class="ui-button cancel-resign"
+            onclick={() => (showResignModal = false)}
+            >
+            Cancel
+        </button>
+        <button
             class="ui-button confirm-resign"
             onclick={confirmResign}
         >
             Yes, Resign
-        </button>
-        <button
-            class="ui-button cancel-resign"
-            onclick={() => (showResignModal = false)}
-        >
-            Cancel
         </button>
     </div>
 </div>
@@ -696,7 +758,7 @@
                         class="ui-button create-game"
                         onclick={createGame}
                         disabled={availableGames.some(game => 
-                            game.white === username || game.black === username
+                            game.white?.username === username || game.black?.username === username
                         )}
                     >
                         Create New Game
@@ -781,42 +843,31 @@
                 </button>
 
                 {#if gameMode === "multiplayer"}
-                    {#if drawOffer}
-                        {#if (drawOffer.offeredBy === "white" && playerColor === "black") || (drawOffer.offeredBy === "black" && playerColor === "white")}
-                            <div class="draw-offer">
-                                <span>Draw offered by opponent</span>
-                                <button
-                                    class="ui-button accept-draw"
-                                    onclick={() => handleDrawResponse(true)}
-                                >
-                                    Accept Draw
-                                </button>
-                                <button
-                                    class="ui-button decline-draw"
-                                    onclick={() => handleDrawResponse(false)}
-                                >
-                                    Decline
-                                </button>
-                            </div>
+                    <button
+                        class="ui-button draw-button"
+                        onclick={() => showDrawOfferModal = true}
+                    >
+                        {#if drawOffer}
+                            {#if (drawOffer.offeredBy === "white" && playerColor === "black") || 
+                                (drawOffer.offeredBy === "black" && playerColor === "white")}
+                                Respond to Draw
+                            {:else}
+                                Draw Offered
+                            {/if}
                         {:else}
-                            <div class="draw-offer">
-                                <span>Draw offer pending...</span>
-                            </div>
-                        {/if}
-                    {:else}
-                        <button
-                            class="ui-button draw-button"
-                            onclick={() => gameClient.offerDraw()}
-                            disabled={currentPlayer !== playerColor}
-                        >
                             Offer Draw
-                        </button>
-                    {/if}
+                        {/if}
+                    </button>
                 {/if}
             </div>
         </div>
 
         <div class="status">{statusMessage}</div>
+        {#if opponentDisconnected}
+            <div class="disconnection-banner">
+                {disconnectionMessage}
+            </div>
+        {/if}
 
         {#if promotionPending}
             <div class="promotion-dialog">
@@ -1388,6 +1439,54 @@
         pointer-events: none;
         z-index: 10;
         animation: movePiece 300ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    }
+
+    .disconnection-banner {
+        background-color: var(--warning);
+        color: white;
+        padding: $spacing-sm $spacing-md;
+        border-radius: $border-radius;
+        text-align: center;
+        margin-bottom: $spacing-md;
+    }
+
+    .draw-offer-modal-content {
+        p {
+            color: var(--text-secondary);
+            margin-bottom: $spacing-md;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: $spacing-md;
+            justify-content: flex-end;
+        }
+
+        .accept-draw {
+            background-color: var(--success);
+            color: white;
+
+            &:hover {
+                filter: brightness(0.9);
+            }
+        }
+
+        .decline-draw, .cancel-draw {
+            background-color: var(--error);
+
+            &:hover {
+                filter: brightness(0.9);
+            }
+        }
+
+        .confirm-draw {
+            background-color: var(--success);
+            color: white;
+
+            &:hover {
+                filter: brightness(0.9);
+            }
+        }
     }
 
     @keyframes movePiece {

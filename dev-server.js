@@ -46,6 +46,9 @@ wss.on("connection", (ws) => {
                             white: preferredColor === "white" ? { userId, username: client.username } : null,
                             black: preferredColor === "black" ? { userId, username: client.username } : null,
                             spectators: [],
+                            drawOffer: null,
+                            disconnectedPlayer: null,
+                            disconnectTime: null,
                             gameState: {
                                 board: initialBoard,
                                 currentPlayer: "white",
@@ -78,7 +81,40 @@ wss.on("connection", (ws) => {
                     const game = games.get(data.gameId);
                     const joiningClient = clients.get(userId);
 
-                    if (game && joiningClient && !game.black) {
+                    if (!game || !joiningClient) return;
+
+                    const isRejoin =
+                        (game.white?.userId === userId || game.black?.userId === userId) &&
+                        game.disconnectedPlayer === userId;
+
+                    if (isRejoin) {
+                        joiningClient.status = "playing";
+                        delete game.disconnectedPlayer;
+                        delete game.disconnectTime;
+
+                        const color = game.white?.userId === userId ? "white" : "black";
+                        const opponent = color === "white" ? game.black : game.white;
+
+                        joiningClient.ws.send(
+                            JSON.stringify({
+                                type: "game_joined",
+                                gameId: data.gameId,
+                                gameState: game.gameState,
+                                color,
+                                opponent: opponent.username,
+                            })
+                        );
+
+                        const opponentClient = clients.get(opponent.userId);
+                        if (opponentClient) {
+                            opponentClient.ws.send(
+                                JSON.stringify({
+                                    type: "opponent_reconnected",
+                                    gameState: game.gameState,
+                                })
+                            );
+                        }
+                    } else if (!game.black) {
                         game.black = {
                             userId,
                             username: joiningClient.username,
@@ -86,7 +122,6 @@ wss.on("connection", (ws) => {
                         game.gameState.status = "active";
                         joiningClient.status = "playing";
 
-                        // Update notification to white player
                         const whitePlayer = clients.get(game.white.userId);
                         if (whitePlayer) {
                             whitePlayer.ws.send(
@@ -100,8 +135,7 @@ wss.on("connection", (ws) => {
                             );
                         }
 
-                        // Notification to black player
-                        ws.send(
+                        joiningClient.ws.send(
                             JSON.stringify({
                                 type: "game_joined",
                                 gameId: data.gameId,
@@ -110,9 +144,9 @@ wss.on("connection", (ws) => {
                                 opponent: game.white.username,
                             })
                         );
-
-                        broadcastLobbyState();
                     }
+
+                    broadcastLobbyState();
                     break;
                 }
 
@@ -299,11 +333,7 @@ wss.on("connection", (ws) => {
     });
 
     ws.on("close", () => {
-        const client = clients.get(userId);
-        if (client) {
-            clients.delete(userId);
-            broadcastLobbyState();
-        }
+        handleDisconnect(userId);
     });
 });
 
@@ -397,6 +427,67 @@ function cancelDrawOffer(game) {
             spectator.ws.send(message);
         }
     });
+}
+
+function handleDisconnect(userId) {
+    const client = clients.get(userId);
+    if (!client) return;
+
+    for (const [gameId, game] of games.entries()) {
+        const isWhite = game.white?.userId === userId;
+        const isBlack = game.black?.userId === userId;
+
+        if (isWhite || isBlack) {
+            if (game.disconnectedPlayer === userId) {
+                const winner = isWhite ? "black" : "white";
+                const winningPlayer = isWhite ? game.black : game.white;
+                const losingUsername = isWhite ? game.white.username : game.black.username;
+
+                const message = JSON.stringify({
+                    type: "game_ended",
+                    reason: `${losingUsername} disconnected. ${winner} wins by walkover!`,
+                });
+
+                const winnerClient = clients.get(winningPlayer.userId);
+                if (winnerClient) {
+                    winnerClient.status = "available";
+                    winnerClient.ws.send(message);
+                }
+
+                game.spectators?.forEach((spectatorId) => {
+                    const spectator = clients.get(spectatorId);
+                    if (spectator) spectator.ws.send(message);
+                });
+
+                games.delete(gameId);
+            } else {
+                game.disconnectedPlayer = userId;
+                game.disconnectTime = Date.now();
+
+                const opponent = isWhite ? game.black : game.white;
+                const opponentClient = clients.get(opponent.userId);
+                if (opponentClient) {
+                    opponentClient.ws.send(
+                        JSON.stringify({
+                            type: "opponent_disconnected",
+                            message: "Opponent disconnected. Waiting for reconnection...",
+                        })
+                    );
+                }
+
+                // Set timeout for automatic forfeit
+                setTimeout(() => {
+                    const currentGame = games.get(gameId);
+                    if (currentGame && currentGame.disconnectedPlayer === userId) {
+                        handleDisconnect(userId);
+                    }
+                }, 30000);
+            }
+        }
+    }
+
+    clients.delete(userId);
+    broadcastLobbyState();
 }
 
 const PORT = 3000;
