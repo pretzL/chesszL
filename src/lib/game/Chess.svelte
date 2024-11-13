@@ -3,7 +3,7 @@
     import { ChessAI } from "./aiModule.js";
     import { ChessGameClient } from "../client/chessGameClient.js";
     import { storage } from "$lib/utils/storage";
-    import { Modal } from "$components";
+    import { Modal, GameControls } from "$components";
     import { browser } from "$app/environment";
     import { onDestroy } from "svelte";
 
@@ -690,6 +690,20 @@
         }
     })
 
+    let isMobile = $state(false);
+    $effect(() => {
+        if (typeof window !== "undefined") {
+            const checkMobile = () => {
+                isMobile = window.innerWidth < 768;
+            };
+
+            checkMobile();
+            window.addEventListener("resize", checkMobile);
+
+            return () => window.removeEventListener("resize", checkMobile);
+        }
+    });
+
     onDestroy(() => {
         if (gameClient) {
             gameClient.disconnect();
@@ -824,9 +838,9 @@
     </Modal>
 {/if}
 
-<div class="game">
+{#snippet themeButton(elementClass)}
     <button
-        class="ui-button theme-toggle"
+        class={elementClass}
         onclick={toggleTheme}
     >
         {#if theme === "light"}
@@ -835,13 +849,23 @@
             ☼ Light Mode
         {/if}
     </button>
+{/snippet}
+
+{#snippet backButton(elementClass)}
     {#if gameMode}
         <button
-            class="ui-button back-button"
+            class={elementClass}
             onclick={() => (gameMode = null)}
         >
             Back
         </button>
+    {/if}
+{/snippet}
+
+<div class="game">
+    {#if !isMobile}
+        {@render themeButton("ui-button theme-toggle")}
+        {@render backButton("ui-button back-button")}
     {/if}
     {#if !gameMode}
     <div class="mode-select">
@@ -957,73 +981,22 @@
             </div>
         </div>
     {:else}
-        <div class="controls">
-            <div class="control-group">
-                {#if gameMode === "ai"}
-                    <div class="difficulty-selector">
-                        <label
-                            for="difficulty"
-                            class="difficulty-title"
-                        >
-                            AI Difficulty:
-                        </label>
-                        <select
-                            id="difficulty"
-                            bind:value={difficulty}
-                            onchange={(e) => handleDifficultyChange(e.target.value)}
-                        >
-                            <option value="easy">Easy</option>
-                            <option value="medium">Medium</option>
-                            <option value="hard">Hard</option>
-                        </select>
-                    </div>
-                {:else if gameMode === "multiplayer"}
-                    <div class="game-info">
-                        <p>Playing as: <span class="inline-badge">{playerColor}</span></p>
-                        <p>Opponent: <span class="inline-badge">{opponent}</span></p>
-                    </div>
-                {/if}
-
-                <button 
-                    class="ui-button toggle-last-move"
-                    onclick={() => showMoveHighlight = !showMoveHighlight}
-                >
-                    {showMoveHighlight ? 'Hide' : 'Show'} Moves
-                </button>
-
-                <button
-                    class="ui-button new-game-button"
-                    onclick={resetGame}
-                >
-                    New Game
-                </button>
-
-                <button
-                    class="ui-button resign-button"
-                    onclick={handleResignClick}
-                >
-                    Resign
-                </button>
-
-                {#if gameMode === "multiplayer"}
-                    <button
-                        class="ui-button draw-button"
-                        onclick={() => showDrawOfferModal = true}
-                    >
-                        {#if drawOffer}
-                            {#if (drawOffer.offeredBy === "white" && playerColor === "black") || 
-                                (drawOffer.offeredBy === "black" && playerColor === "white")}
-                                Respond to Draw
-                            {:else}
-                                Draw Offered
-                            {/if}
-                        {:else}
-                            Offer Draw
-                        {/if}
-                    </button>
-                {/if}
-            </div>
-        </div>
+        <GameControls
+            {isMobile}
+            {gameMode}
+            {playerColor}
+            {opponent}
+            {difficulty}
+            {showMoveHighlight}
+            {drawOffer}
+            {themeButton}
+            {backButton}
+            onDifficultyChange={handleDifficultyChange}
+            onNewGame={resetGame}
+            onResign={handleResignClick}
+            onDrawOffer={() => showDrawOfferModal = true}
+            onToggleMoveHighlight={() => showMoveHighlight = !showMoveHighlight}
+        />
 
         <div class="status">{statusMessage}</div>
         {#if opponentDisconnected}
@@ -1217,27 +1190,7 @@
 </div>
 
 <style lang="scss">
-    @mixin button-base {
-        padding: $spacing-sm $spacing-md;
-        border-radius: $border-radius;
-        border: 1px solid var(--border-color);
-        background-color: var(--button-bg);
-        color: var(--button-text);
-        cursor: pointer;
-        transition: all 0.2s ease;
-        font-weight: 500;
-
-        &:hover {
-            background-color: var(--button-hover);
-        }
-    }
-
-    @mixin card-base {
-        background-color: var(--bg-secondary);
-        border: 1px solid var(--border-color);
-        border-radius: $border-radius;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    }
+    @import "../styles/_mixins.scss";
 
     .game {
         display: flex;
@@ -1248,7 +1201,7 @@
         background-color: var(--bg-primary);
         color: var(--text-primary);
         min-height: 100vh;
-    }
+    } 
 
     .game-info {
         display: flex;
@@ -1565,26 +1518,6 @@
         }
     }
 
-    .controls {
-        display: flex;
-        gap: $spacing-md;
-        margin-bottom: $spacing-md;
-        align-items: center;
-        width: 100%;
-        justify-content: space-between;
-
-        .control-group {
-            display: flex;
-            gap: $spacing-md;
-            align-items: center;
-            width: 100%;
-        }
-
-        button {
-            text-wrap: nowrap;
-        }
-    }
-
     .theme-toggle {
         @include button-base;
         position: absolute;
@@ -1597,21 +1530,6 @@
         position: absolute;
         top: $spacing-md;
         left: $spacing-md;
-    }
-
-    select {
-        @include button-base;
-        padding: $spacing-sm;
-    }
-
-    .difficulty-selector {
-        display: flex;
-        gap: $spacing-sm;
-        align-items: center;
-
-        .difficulty-title {
-            text-wrap: nowrap;
-        }
     }
 
     .lobby {
@@ -1859,6 +1777,37 @@
         
         &:hover {
             filter: brightness(0.9);
+        }
+    }
+
+    .board-and-pieces {
+        @media (max-width: $breakpoint-md) {
+            transform: scale(0.8);
+            transform-origin: top center;
+        }
+
+        @media (max-width: $breakpoint-sm) {
+            transform: scale(0.6);
+        }
+    }
+
+    .game-container {
+        @media (max-width: $breakpoint-md) {
+            flex-direction: column;
+            align-items: center;
+            
+            .move-history {
+                width: 100%;
+                max-width: $board-size;
+                max-height: 200px;
+            }
+        }
+    }
+
+    .captured-bar {
+        @media (max-width: $breakpoint-md) {
+            width: 100%;
+            justify-content: center;
         }
     }
 
