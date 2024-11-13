@@ -208,6 +208,8 @@ async function handleSquareClick(row, col) {
 
     if (gameMode === "multiplayer" && currentPlayer !== playerColor) return;
 
+    clearHistorySelection();
+
     const square = engine.board[row][col];
 
     if (selectedPiece) {
@@ -281,6 +283,12 @@ async function handleSquareClick(row, col) {
     }
 
     function handleHistoryMoveClick(move, index) {
+        if (selectedHistoryMove?.moveNumber === reversedMoveHistory.length - index) {
+            selectedHistoryMove = null;
+            ghostPiece = null;
+            return;
+        }
+
         // Convert algebraic notation to board coordinates
         const files = "abcdefgh";
         const fromCol = files.indexOf(move.from[0]);
@@ -304,6 +312,11 @@ async function handleSquareClick(row, col) {
             toRow,
             toCol
         };
+    }
+
+    function clearHistorySelection() {
+        selectedHistoryMove = null;
+        ghostPiece = null;
     }
 
     function handleDrawOffered(offeredBy) {
@@ -399,6 +412,7 @@ async function handleSquareClick(row, col) {
         promotionPending = null;
         statusMessage = "White's turn";
         gameResult = null;
+        clearHistorySelection();
 
         if (gameMode === "ai") {
             isAIThinking = false;
@@ -428,6 +442,7 @@ async function handleSquareClick(row, col) {
     function handleGameUpdate(gameState) {
         engine = new ChessEngine(gameState.board);
         currentPlayer = gameState.currentPlayer;
+        clearHistorySelection();
 
         if (gameState.moveHistory) {
             moveHistory = gameState.moveHistory.map((move) => ({
@@ -449,6 +464,7 @@ async function handleSquareClick(row, col) {
     function handleGameEnd(reason) {
         gameStatus = "ended";
         statusMessage = reason;
+        clearHistorySelection();
         
         if (reason.includes("resigned")) {
             const winner = reason.includes("white wins") ? "white" : "black";
@@ -955,7 +971,15 @@ async function handleSquareClick(row, col) {
             {#if isAIThinking}
                 <div class="ai-thinking">AI is thinking...</div>
             {/if}
-            <div class="board-container">
+            <!-- svelte-ignore a11y_click_events_have_key_events -->
+            <div class="board-container" onclick={(e) => {
+                if (e.target.classList.contains('board-container')) {
+                    clearHistorySelection();
+                }
+            }}
+            tabindex="0"
+            role="button"
+            >
                 <div class="rank-markers">
                     {#each Array(8) as _, index}
                         <div class="rank-marker">
@@ -1271,6 +1295,7 @@ async function handleSquareClick(row, col) {
             calc(var(--col) * 100%),
             calc(var(--row) * 100%)
         );
+        transition: transform 0.3s ease;
     }
 
     .promotion-dialog {
@@ -1322,7 +1347,8 @@ async function handleSquareClick(row, col) {
         cursor: pointer;
         padding: $spacing-sm $spacing-md;
         border-radius: $border-radius;
-        transition: background-color 0.2s ease;
+        transition: all 0.2s ease;
+        border: 2px solid transparent;
 
         &:hover {
             background-color: var(--bg-hover);
@@ -1331,6 +1357,7 @@ async function handleSquareClick(row, col) {
         &.selected {
             background-color: var(--highlight-selected);
             color: var(--text-primary);
+            border-color: var(--primary);
         }
     }
 
