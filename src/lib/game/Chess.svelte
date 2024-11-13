@@ -70,51 +70,12 @@
         const inCheck = engine.isInCheck(currentPlayer);
         if (inCheck) {
             statusMessage = `${currentPlayer === "white" ? "White" : "Black"} is in check!`;
-            // Add visual indicator for king in check
+            
             const [kingRow, kingCol] = engine.findKing(currentPlayer);
             lastCheck = { row: kingRow, col: kingCol };
         } else {
             statusMessage = `${currentPlayer === "white" ? "White" : "Black"}'s turn`;
             lastCheck = null;
-        }
-    }
-
-    function updateCapturedPieces(fromRow, fromCol, toRow, toCol) {
-        const targetSquare = engine.board[toRow][toCol];
-        const movingPiece = engine.board[fromRow][fromCol];
-        
-        if (targetSquare.piece && targetSquare.color !== movingPiece.color) {
-            if (movingPiece.color === 'white') {
-                capturedPieces.byWhite[targetSquare.piece] = 
-                    (capturedPieces.byWhite[targetSquare.piece] || 0) + 1;
-            } else {
-                capturedPieces.byBlack[targetSquare.piece] = 
-                    (capturedPieces.byBlack[targetSquare.piece] || 0) + 1;
-            }
-        }
-
-        // En passant capture
-        const pieceType = engine.getPieceType(movingPiece.piece);
-        if (pieceType === 'pawn' && 
-            Math.abs(fromCol - toCol) === 1 && 
-            !targetSquare.piece && 
-            Math.abs(fromRow - toRow) === 1) {
-            
-            if (engine.lastMove && 
-                engine.getPieceType(engine.board[engine.lastMove.toRow][engine.lastMove.toCol].piece) === 'pawn' &&
-                Math.abs(engine.lastMove.fromRow - engine.lastMove.toRow) === 2 &&
-                engine.lastMove.toRow === fromRow &&
-                engine.lastMove.toCol === toCol) {
-                
-                const capturedPawn = movingPiece.color === 'white' ? '♟' : '♙';
-                if (movingPiece.color === 'white') {
-                    capturedPieces.byWhite[capturedPawn] = 
-                        (capturedPieces.byWhite[capturedPawn] || 0) + 1;
-                } else {
-                    capturedPieces.byBlack[capturedPawn] = 
-                        (capturedPieces.byBlack[capturedPawn] || 0) + 1;
-                }
-            }
         }
     }
 
