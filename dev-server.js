@@ -1,6 +1,7 @@
 import { WebSocketServer } from "ws";
 import { createServer } from "http";
 import { nanoid } from "nanoid";
+import { ChessEngine } from "./src/lib/game/ChessEngine.js";
 
 const server = createServer((req, res) => {
     res.writeHead(404);
@@ -167,9 +168,61 @@ wss.on("connection", (ws) => {
                             gameToUpdate.gameState.currentPlayer === "white" ? "black" : "white";
                         gameToUpdate.gameState.moveHistory = [...gameToUpdate.gameState.moveHistory, moveEntry];
 
+                        const tempEngine = new ChessEngine(gameToUpdate.gameState.board);
+                        const gameStatus = tempEngine.getGameStatus(gameToUpdate.gameState.currentPlayer);
+
+                        if (gameStatus === "checkmate") {
+                            const winner = gameToUpdate.gameState.currentPlayer === "white" ? "black" : "white";
+                            const gameEndMessage = JSON.stringify({
+                                type: "game_ended",
+                                reason: `${winner === "white" ? "White" : "Black"} wins by checkmate!`,
+                            });
+
+                            const whitePlayer = clients.get(gameToUpdate.white.userId);
+                            const blackPlayer = clients.get(gameToUpdate.black.userId);
+
+                            if (whitePlayer) {
+                                whitePlayer.status = "available";
+                                whitePlayer.ws.send(gameEndMessage);
+                            }
+                            if (blackPlayer) {
+                                blackPlayer.status = "available";
+                                blackPlayer.ws.send(gameEndMessage);
+                            }
+
+                            games.delete(data.gameId);
+                            broadcastLobbyState();
+                            return;
+                        } else if (gameStatus === "stalemate") {
+                            const gameEndMessage = JSON.stringify({
+                                type: "game_ended",
+                                reason: "Game drawn by stalemate",
+                            });
+
+                            const whitePlayer = clients.get(gameToUpdate.white.userId);
+                            const blackPlayer = clients.get(gameToUpdate.black.userId);
+
+                            if (whitePlayer) {
+                                whitePlayer.status = "available";
+                                whitePlayer.ws.send(gameEndMessage);
+                            }
+                            if (blackPlayer) {
+                                blackPlayer.status = "available";
+                                blackPlayer.ws.send(gameEndMessage);
+                            }
+
+                            games.delete(data.gameId);
+                            broadcastLobbyState();
+                            return;
+                        }
+
                         const gameUpdate = JSON.stringify({
                             type: "game_update",
-                            gameState: gameToUpdate.gameState,
+                            gameState: {
+                                ...gameToUpdate.gameState,
+                                status: gameStatus,
+                                currentPlayer: gameToUpdate.gameState.currentPlayer,
+                            },
                         });
 
                         const whitePlayerWs = clients.get(gameToUpdate.white.userId)?.ws;

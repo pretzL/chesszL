@@ -45,6 +45,7 @@
     let localGameRotation = $state(false);
     let opponentDisconnected = $state(false);
     let disconnectionMessage = $state("");
+    let lastCheck = $state(null);
 
     function toggleTheme() {
         theme = theme === "light" ? "dark" : "light";
@@ -57,14 +58,19 @@
             return;
         }
 
-        if (gameStatus === "checkmate") {
-            statusMessage = `${currentPlayer === "white" ? "Black" : "White"} wins by checkmate!`;
-        } else if (gameStatus === "stalemate") {
-            statusMessage = "Game drawn by stalemate";
-        } else if (gameStatus === "check") {
-            statusMessage = `${currentPlayer}, you are in check!`;
+        if (gameStatus === "ended") {
+            return;
+        }
+
+        const inCheck = engine.isInCheck(currentPlayer);
+        if (inCheck) {
+            statusMessage = `${currentPlayer === "white" ? "White" : "Black"} is in check!`;
+            // Add visual indicator for king in check
+            const [kingRow, kingCol] = engine.findKing(currentPlayer);
+            lastCheck = { row: kingRow, col: kingCol };
         } else {
-            statusMessage = `${currentPlayer}'s turn`;
+            statusMessage = `${currentPlayer === "white" ? "White" : "Black"}'s turn`;
+            lastCheck = null;
         }
     }
 
@@ -89,9 +95,6 @@
 
     function finishMove() {
         const nextPlayer = currentPlayer === "white" ? "black" : "white";
-        const newStatus = engine.getGameStatus(nextPlayer);
-
-        gameStatus = newStatus;
         currentPlayer = nextPlayer;
         selectedPiece = null;
 
@@ -111,6 +114,32 @@
 
         promotionPending = null;
         finishMove();
+    }
+
+    function checkGameState(newBoard) {
+        const nextPlayer = currentPlayer === "white" ? "black" : "white";
+        const tempEngine = new ChessEngine(newBoard);
+        const newStatus = tempEngine.getGameStatus(nextPlayer);
+        
+        if (newStatus === "checkmate") {
+            gameStatus = "ended";
+            const winner = currentPlayer;
+            gameResult = {
+                winner,
+                reason: `${winner === "white" ? "White" : "Black"} wins by checkmate!`
+            };
+            return "checkmate";
+        } else if (newStatus === "stalemate") {
+            gameStatus = "ended";
+            gameResult = {
+                winner: null,
+                reason: "Game drawn by stalemate"
+            };
+            return "stalemate";
+        } else if (newStatus === "check") {
+            return "check";
+        }
+        return "active";
     }
 
     async function makeAIMove() {
@@ -229,9 +258,12 @@ async function handleSquareClick(row, col) {
                             promotionPending = result.promotionData;
                             updateGameStatus();
                         } else {
-                            finishMove();
-                            if (gameMode === "ai") {
-                                ai = new ChessAI(engine, difficulty, playerColor === "white" ? "black" : "white");
+                            const newState = checkGameState(result.board);
+                            if (newState === "active" || newState === "check") {
+                                finishMove();
+                                if (gameMode === "ai") {
+                                    ai = new ChessAI(engine, difficulty, playerColor === "white" ? "black" : "white");
+                                }
                             }
                         }
                     }
@@ -400,11 +432,12 @@ async function handleSquareClick(row, col) {
         if (gameState.moveHistory) {
             moveHistory = gameState.moveHistory.map((move) => ({
                 ...move,
-                from:
-                    move.from?.row !== undefined
-                        ? `${String.fromCharCode(97 + move.from.col)}${8 - move.from.row}`
-                        : move.from,
-                to: move.to?.row !== undefined ? `${String.fromCharCode(97 + move.to.col)}${8 - move.to.row}` : move.to,
+                from: move.from?.row !== undefined
+                    ? `${String.fromCharCode(97 + move.from.col)}${8 - move.from.row}`
+                    : move.from,
+                to: move.to?.row !== undefined
+                    ? `${String.fromCharCode(97 + move.to.col)}${8 - move.to.row}`
+                    : move.to,
                 player: move.player || (currentPlayer === "white" ? "black" : "white"),
             }));
         }
@@ -953,12 +986,14 @@ async function handleSquareClick(row, col) {
                                 {@const isHistoryMove = selectedHistoryMove && 
                                     ((selectedHistoryMove.fromRow === rowIndex && selectedHistoryMove.fromCol === colIndex) ||
                                     (selectedHistoryMove.toRow === rowIndex && selectedHistoryMove.toCol === colIndex))}
+                                {@const isInCheck = lastCheck && lastCheck.row === rowIndex && lastCheck.col === colIndex}
                                 <div
                                     class="square {getSquareColor(displayRowIndex, displayColIndex)}"
                                     class:selected={isSelected}
                                     class:valid-move={isValidTarget}
                                     class:last-move={isLastMove}
                                     class:history-move={isHistoryMove}
+                                    class:in-check={isInCheck}
                                     onclick={() => handleSquareClick(rowIndex, colIndex)}
                                     onkeypress={(e) => {
                                         if (e.key === "Enter") handleSquareClick(rowIndex, colIndex);
@@ -1215,6 +1250,11 @@ async function handleSquareClick(row, col) {
         &.history-move {
             background-color: var(--highlight-history);
         }
+
+        &.in-check {
+            background-color: var(--check-highlight) !important;
+            animation: pulse 1s infinite;
+        }
     }
 
     .ghost-piece {
@@ -1467,11 +1507,6 @@ async function handleSquareClick(row, col) {
         display: flex;
         align-items: center;
         gap: $spacing-sm;
-
-        span {
-            color: var(--text-secondary);
-            font-style: italic;
-        }
     }
 
     .accept-draw {
@@ -1597,6 +1632,18 @@ async function handleSquareClick(row, col) {
                 calc(var(--end-col) * 100%),
                 calc(var(--end-row) * 100%)
             );
+        }
+    }
+
+    @keyframes pulse {
+        0% {
+            box-shadow: 0 0 0 0 var(--check-highlight-glow);
+        }
+        70% {
+            box-shadow: 0 0 0 10px rgba(255, 0, 0, 0);
+        }
+        100% {
+            box-shadow: 0 0 0 0 rgba(255, 0, 0, 0);
         }
     }
 
