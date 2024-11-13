@@ -1,7 +1,5 @@
 import { sveltekit } from "@sveltejs/kit/vite";
 import { defineConfig } from "vite";
-import { mkdirSync, copyFileSync, existsSync } from "fs";
-import { resolve } from "path";
 
 export default defineConfig({
     plugins: [sveltekit()],
@@ -14,7 +12,7 @@ export default defineConfig({
     },
     server: {
         proxy: {
-            "/ws": {
+            "/chess": {
                 target: "ws://localhost:3000",
                 ws: true,
             },

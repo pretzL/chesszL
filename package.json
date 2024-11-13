@@ -4,10 +4,10 @@
 	"type": "module",
 	"scripts": {
 		"dev:app": "vite dev",
-		"dev:websocket": "node dev-server.js",
-		"dev": "concurrently \"npm run dev:app\" \"npm run dev:websocket\"",
+		"dev:server": "cross-env NODE_ENV=development node server.js",
+		"dev": "concurrently \"npm run dev:app\" \"npm run dev:server\"",
 		"build": "vite build",
-		"start": "node server.js",
+		"start": "cross-env NODE_ENV=production node server.js",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./jsconfig.json --watch"
@@ -17,6 +17,7 @@
 		"@sveltejs/kit": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^4.0.0",
 		"concurrently": "^8.2.2",
+		"cross-env": "^7.0.3",
 		"sass": "^1.80.6",
 		"svelte": "^5.0.0",
 		"svelte-check": "^4.0.0",

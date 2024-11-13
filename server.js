@@ -4,16 +4,26 @@ import { nanoid } from "nanoid";
 import { fileURLToPath } from "url";
 import { dirname } from "path";
 import express from "express";
-import { handler } from "./build/handler.js";
 import { ChessEngine } from "./src/lib/game/ChessEngine.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+// Initialize server based on environment
 const app = express();
 const server = createServer(app);
-const wss = new WebSocketServer({ server });
+const isDev = process.env.NODE_ENV === "development";
 
-app.use(handler);
+// In production, use the built handler
+if (!isDev) {
+    const { handler } = await import("./build/handler.js");
+    app.use(handler);
+}
+
+// WebSocket setup
+const wss = new WebSocketServer({
+    server,
+    path: "/chess",
+});
 
 const clients = new Map();
 const games = new Map();
@@ -50,6 +60,8 @@ wss.on("connection", (ws) => {
                             black: preferredColor === "black" ? { userId, username: client.username } : null,
                             spectators: [],
                             drawOffer: null,
+                            disconnectedPlayer: null,
+                            disconnectTime: null,
                             gameState: {
                                 board: initialBoard,
                                 currentPlayer: "white",
@@ -213,9 +225,7 @@ wss.on("connection", (ws) => {
 
                     if (game && client && (game.white?.userId === userId || game.black?.userId === userId)) {
                         games.delete(data.gameId);
-
                         client.status = "available";
-
                         broadcastLobbyState();
                     }
                     break;
@@ -274,7 +284,6 @@ wss.on("connection", (ws) => {
                         const isBlack = game.black?.userId === userId;
 
                         if (!isWhite && !isBlack) return;
-
                         if (game.drawOffer) return;
 
                         game.drawOffer = {
@@ -516,7 +525,10 @@ function handleDisconnect(userId) {
     broadcastLobbyState();
 }
 
+// Start server based on environment
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT} in ${isDev ? "development" : "production"} mode`);
 });
+
+export default server;
