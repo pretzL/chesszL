@@ -55,6 +55,10 @@ wss.on("connection", (ws) => {
                                 currentPlayer: "white",
                                 moveHistory: [],
                                 status: "waiting",
+                                captures: {
+                                    byWhite: {},
+                                    byBlack: {},
+                                },
                             },
                         });
 
@@ -154,82 +158,51 @@ wss.on("connection", (ws) => {
                 case "make_move": {
                     const gameToUpdate = games.get(data.gameId);
                     if (gameToUpdate) {
-                        const movingPiece = data.move.piece;
+                        if (!gameToUpdate.gameState.captures) {
+                            gameToUpdate.gameState.captures = {
+                                byWhite: {},
+                                byBlack: {},
+                            };
+                        }
 
-                        const moveEntry = {
-                            piece: movingPiece,
-                            from: `${String.fromCharCode(97 + data.move.fromCol)}${8 - data.move.fromRow}`,
-                            to: `${String.fromCharCode(97 + data.move.toCol)}${8 - data.move.toRow}`,
-                            player: gameToUpdate.gameState.currentPlayer,
-                        };
+                        if (data.move.capturedPiece) {
+                            const capturer = data.move.capturedBy;
+                            const captures = gameToUpdate.gameState.captures;
+
+                            if (capturer === "white") {
+                                if (!captures.byWhite[data.move.capturedPiece]) {
+                                    captures.byWhite[data.move.capturedPiece] = 0;
+                                }
+                                captures.byWhite[data.move.capturedPiece]++;
+                            } else {
+                                if (!captures.byBlack[data.move.capturedPiece]) {
+                                    captures.byBlack[data.move.capturedPiece] = 0;
+                                }
+                                captures.byBlack[data.move.capturedPiece]++;
+                            }
+                        }
 
                         gameToUpdate.gameState.board = data.move.newBoard;
                         gameToUpdate.gameState.currentPlayer =
                             gameToUpdate.gameState.currentPlayer === "white" ? "black" : "white";
-                        gameToUpdate.gameState.moveHistory = [...gameToUpdate.gameState.moveHistory, moveEntry];
 
-                        const tempEngine = new ChessEngine(gameToUpdate.gameState.board);
-                        const gameStatus = tempEngine.getGameStatus(gameToUpdate.gameState.currentPlayer);
-
-                        if (gameStatus === "checkmate") {
-                            const winner = gameToUpdate.gameState.currentPlayer === "white" ? "black" : "white";
-                            const gameEndMessage = JSON.stringify({
-                                type: "game_ended",
-                                reason: `${winner === "white" ? "White" : "Black"} wins by checkmate!`,
-                            });
-
-                            const whitePlayer = clients.get(gameToUpdate.white.userId);
-                            const blackPlayer = clients.get(gameToUpdate.black.userId);
-
-                            if (whitePlayer) {
-                                whitePlayer.status = "available";
-                                whitePlayer.ws.send(gameEndMessage);
-                            }
-                            if (blackPlayer) {
-                                blackPlayer.status = "available";
-                                blackPlayer.ws.send(gameEndMessage);
-                            }
-
-                            games.delete(data.gameId);
-                            broadcastLobbyState();
-                            return;
-                        } else if (gameStatus === "stalemate") {
-                            const gameEndMessage = JSON.stringify({
-                                type: "game_ended",
-                                reason: "Game drawn by stalemate",
-                            });
-
-                            const whitePlayer = clients.get(gameToUpdate.white.userId);
-                            const blackPlayer = clients.get(gameToUpdate.black.userId);
-
-                            if (whitePlayer) {
-                                whitePlayer.status = "available";
-                                whitePlayer.ws.send(gameEndMessage);
-                            }
-                            if (blackPlayer) {
-                                blackPlayer.status = "available";
-                                blackPlayer.ws.send(gameEndMessage);
-                            }
-
-                            games.delete(data.gameId);
-                            broadcastLobbyState();
-                            return;
-                        }
-
-                        const gameUpdate = JSON.stringify({
+                        const gameUpdate = {
                             type: "game_update",
                             gameState: {
-                                ...gameToUpdate.gameState,
-                                status: gameStatus,
+                                board: gameToUpdate.gameState.board,
                                 currentPlayer: gameToUpdate.gameState.currentPlayer,
+                                captures: gameToUpdate.gameState.captures,
+                                moveHistory: gameToUpdate.gameState.moveHistory,
                             },
-                        });
+                        };
+
+                        const updateMessage = JSON.stringify(gameUpdate);
 
                         const whitePlayerWs = clients.get(gameToUpdate.white.userId)?.ws;
                         const blackPlayerWs = clients.get(gameToUpdate.black.userId)?.ws;
 
-                        if (whitePlayerWs) whitePlayerWs.send(gameUpdate);
-                        if (blackPlayerWs) blackPlayerWs.send(gameUpdate);
+                        if (whitePlayerWs) whitePlayerWs.send(updateMessage);
+                        if (blackPlayerWs) blackPlayerWs.send(updateMessage);
                     }
                     break;
                 }

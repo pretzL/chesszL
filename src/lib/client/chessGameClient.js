@@ -141,6 +141,8 @@ export class ChessGameClient {
                 toCol: move.toCol,
                 newBoard: move.newBoard,
                 piece: move.piece,
+                capturedPiece: move.capturedPiece,
+                capturedBy: move.capturedBy,
             },
         });
     }

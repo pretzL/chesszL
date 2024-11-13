@@ -46,6 +46,11 @@
     let opponentDisconnected = $state(false);
     let disconnectionMessage = $state("");
     let lastCheck = $state(null);
+    let capturedPieces = $state({
+        byWhite: {},
+        byBlack: {}
+    });
+    let materialAdvantage = $derived(calculateMaterialAdvantage());
 
     function toggleTheme() {
         theme = theme === "light" ? "dark" : "light";
@@ -72,6 +77,69 @@
             statusMessage = `${currentPlayer === "white" ? "White" : "Black"}'s turn`;
             lastCheck = null;
         }
+    }
+
+    function updateCapturedPieces(fromRow, fromCol, toRow, toCol) {
+        const targetSquare = engine.board[toRow][toCol];
+        const movingPiece = engine.board[fromRow][fromCol];
+        
+        if (targetSquare.piece && targetSquare.color !== movingPiece.color) {
+            if (movingPiece.color === 'white') {
+                capturedPieces.byWhite[targetSquare.piece] = 
+                    (capturedPieces.byWhite[targetSquare.piece] || 0) + 1;
+            } else {
+                capturedPieces.byBlack[targetSquare.piece] = 
+                    (capturedPieces.byBlack[targetSquare.piece] || 0) + 1;
+            }
+        }
+
+        // En passant capture
+        const pieceType = engine.getPieceType(movingPiece.piece);
+        if (pieceType === 'pawn' && 
+            Math.abs(fromCol - toCol) === 1 && 
+            !targetSquare.piece && 
+            Math.abs(fromRow - toRow) === 1) {
+            
+            if (engine.lastMove && 
+                engine.getPieceType(engine.board[engine.lastMove.toRow][engine.lastMove.toCol].piece) === 'pawn' &&
+                Math.abs(engine.lastMove.fromRow - engine.lastMove.toRow) === 2 &&
+                engine.lastMove.toRow === fromRow &&
+                engine.lastMove.toCol === toCol) {
+                
+                const capturedPawn = movingPiece.color === 'white' ? '♟' : '♙';
+                if (movingPiece.color === 'white') {
+                    capturedPieces.byWhite[capturedPawn] = 
+                        (capturedPieces.byWhite[capturedPawn] || 0) + 1;
+                } else {
+                    capturedPieces.byBlack[capturedPawn] = 
+                        (capturedPieces.byBlack[capturedPawn] || 0) + 1;
+                }
+            }
+        }
+    }
+
+    function calculateMaterialAdvantage() {
+        const pieceValues = {
+            '♙': 1, '♟': 1,  // pawns
+            '♘': 3, '♞': 3,  // knights
+            '♗': 3, '♝': 3,  // bishops
+            '♖': 5, '♜': 5,  // rooks
+            '♕': 9, '♛': 9   // queens
+        };
+
+        let whiteAdvantage = 0;
+        
+        // Add value of pieces white has captured
+        for (const [piece, count] of Object.entries(capturedPieces.byWhite)) {
+            whiteAdvantage += (pieceValues[piece] || 0) * count;
+        }
+        
+        // Subtract value of pieces black has captured
+        for (const [piece, count] of Object.entries(capturedPieces.byBlack)) {
+            whiteAdvantage -= (pieceValues[piece] || 0) * count;
+        }
+
+        return whiteAdvantage;
     }
 
     function handleDifficultyChange(newDifficulty) {
@@ -197,62 +265,101 @@
     }
 }
 
-async function handleSquareClick(row, col) {
-    if (
-        promotionPending ||
-        (gameMode === "ai" && isAIThinking) ||
-        (gameStatus !== "active" && gameStatus !== "check") ||
-        movingPiece
-    )
-        return;
+    async function handleSquareClick(row, col) {
+        if (
+            promotionPending ||
+            (gameMode === "ai" && isAIThinking) ||
+            (gameStatus !== "active" && gameStatus !== "check") ||
+            movingPiece
+        )
+            return;
 
-    if (gameMode === "multiplayer" && currentPlayer !== playerColor) return;
+        if (gameMode === "multiplayer" && currentPlayer !== playerColor) return;
 
-    clearHistorySelection();
+        clearHistorySelection();
 
-    const square = engine.board[row][col];
+        const square = engine.board[row][col];
 
-    if (selectedPiece) {
-        const [selectedRow, selectedCol] = selectedPiece;
+        if (selectedPiece) {
+            const [selectedRow, selectedCol] = selectedPiece;
 
-        if (engine.isValidMove(selectedRow, selectedCol, row, col, currentPlayer)) {
-            try {
-                const piece = engine.board[selectedRow][selectedCol].piece;
-                
-                movingPiece = {
-                    piece,
-                    fromRow: selectedRow,
-                    fromCol: selectedCol,
-                    toRow: row,
-                    toCol: col
-                };
+            if (engine.isValidMove(selectedRow, selectedCol, row, col, currentPlayer)) {
+                try {
+                    const piece = engine.board[selectedRow][selectedCol].piece;
+                    const pieceColor = engine.board[selectedRow][selectedCol].color;
+                    const targetSquare = engine.board[row][col];
+                    
+                    let capturedPiece = null;
+                    
+                    if (targetSquare.piece && targetSquare.color !== pieceColor) {
+                        capturedPiece = targetSquare.piece;
+                    }
+                    
+                    // En passant
+                    if (!capturedPiece &&
+                        engine.getPieceType(piece) === 'pawn' &&
+                        Math.abs(selectedCol - col) === 1 &&
+                        !targetSquare.piece) {
+                        
+                        const lastMove = engine.lastMove;
+                        if (lastMove &&
+                            engine.getPieceType(engine.board[lastMove.toRow][lastMove.toCol].piece) === 'pawn' &&
+                            Math.abs(lastMove.fromRow - lastMove.toRow) === 2 &&
+                            lastMove.toRow === selectedRow &&
+                            lastMove.toCol === col) {
+                            
+                            capturedPiece = engine.board[lastMove.toRow][lastMove.toCol].piece;
+                        }
+                    }
 
-                await new Promise(resolve => setTimeout(resolve, 300));
-                
-                const result = engine.makeMove(selectedRow, selectedCol, row, col);
-                movingPiece = null;
-                
-                lastMove = { 
-                    fromRow: selectedRow, 
-                    fromCol: selectedCol, 
-                    toRow: row, 
-                    toCol: col,
-                    piece: piece 
-                };
-                selectedHistoryMove = null;
+                    movingPiece = {
+                        piece,
+                        fromRow: selectedRow,
+                        fromCol: selectedCol,
+                        toRow: row,
+                        toCol: col
+                    };
+
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    
+                    const result = engine.makeMove(selectedRow, selectedCol, row, col);
+                    movingPiece = null;
+                    
+                    lastMove = { 
+                        fromRow: selectedRow, 
+                        fromCol: selectedCol, 
+                        toRow: row, 
+                        toCol: col,
+                        piece: piece
+                    };
+                    selectedHistoryMove = null;
 
                     if (gameMode === "multiplayer") {
-                        gameClient.makeMove({
+                        const moveData = {
                             fromRow: selectedRow,
                             fromCol: selectedCol,
                             toRow: row,
                             toCol: col,
                             newBoard: result.board,
                             piece: piece,
-                        });
+                            capturedPiece,
+                            capturedBy: currentPlayer
+                        };
 
+                        gameClient.makeMove(moveData);
                         selectedPiece = null;
                     } else {
+                        // Local game logic for AI/local multiplayer
+                        if (capturedPiece) {
+                            if (currentPlayer === 'white') {
+                                capturedPieces.byWhite[capturedPiece] = 
+                                    (capturedPieces.byWhite[capturedPiece] || 0) + 1;
+                            } else {
+                                capturedPieces.byBlack[capturedPiece] = 
+                                    (capturedPieces.byBlack[capturedPiece] || 0) + 1;
+                            }
+                        }
+
                         engine = new ChessEngine(result.board);
                         updateMoveHistory(selectedRow, selectedCol, row, col);
 
@@ -412,6 +519,10 @@ async function handleSquareClick(row, col) {
         promotionPending = null;
         statusMessage = "White's turn";
         gameResult = null;
+        capturedPieces = {
+            byWhite: {},
+            byBlack: {}
+        };
         clearHistorySelection();
 
         if (gameMode === "ai") {
@@ -442,7 +553,13 @@ async function handleSquareClick(row, col) {
     function handleGameUpdate(gameState) {
         engine = new ChessEngine(gameState.board);
         currentPlayer = gameState.currentPlayer;
-        clearHistorySelection();
+        
+        if (gameState.captures) {
+            capturedPieces = {
+                byWhite: { ...gameState.captures.byWhite },
+                byBlack: { ...gameState.captures.byBlack }
+            };
+        }
 
         if (gameState.moveHistory) {
             moveHistory = gameState.moveHistory.map((move) => ({
@@ -971,6 +1088,20 @@ async function handleSquareClick(row, col) {
             {#if isAIThinking}
                 <div class="ai-thinking">AI is thinking...</div>
             {/if}
+            <div class="board-and-pieces">
+                <div class="captured-bar {playerColor === 'white' ? 'black' : 'white'}">
+                    {#each Object.entries(playerColor === 'white' ? capturedPieces.byBlack : capturedPieces.byWhite) as [piece, count]}
+                        <div class="captured-piece">
+                            <span class="piece">{piece}</span>
+                            {#if count > 1}
+                                <span class="count">{count}</span>
+                            {/if}
+                        </div>
+                    {/each}
+                    {#if materialAdvantage * (playerColor === 'white' ? -1 : 1) > 0}
+                        <span class="material-advantage">+{Math.abs(materialAdvantage)}</span>
+                    {/if}
+                </div>
             <!-- svelte-ignore a11y_click_events_have_key_events -->
             <div class="board-container" onclick={(e) => {
                 if (e.target.classList.contains('board-container')) {
@@ -1084,6 +1215,20 @@ async function handleSquareClick(row, col) {
                     </div>
                 </div>
             </div>
+            <div class="captured-bar {playerColor === 'white' ? 'white' : 'black'}">
+                {#each Object.entries(playerColor === 'white' ? capturedPieces.byWhite : capturedPieces.byBlack) as [piece, count]}
+                    <div class="captured-piece">
+                        <span class="piece">{piece}</span>
+                        {#if count > 1}
+                            <span class="count">{count}</span>
+                        {/if}
+                    </div>
+                {/each}
+                {#if materialAdvantage * (playerColor === 'white' ? 1 : -1) > 0}
+                    <span class="material-advantage">+{Math.abs(materialAdvantage)}</span>
+                {/if}
+            </div>
+        </div>
 
             <div class="move-history">
                 <h3>Move History</h3>
@@ -1093,6 +1238,11 @@ async function handleSquareClick(row, col) {
                             class="move"
                             class:selected={selectedHistoryMove?.moveNumber === reversedMoveHistory.length - i}
                             onclick={() => handleHistoryMoveClick(move, i)}
+                            onkeypress={(e) => {
+                                if (e.key === "Enter") handleHistoryMoveClick(move, i);
+                            }}
+                            tabindex="0"
+                            role="button"
                         >
                             {reversedMoveHistory.length - i}. {move.player === "white" ? "White" : "Black"}:
                             {move.piece || "♙"}
@@ -1316,6 +1466,75 @@ async function handleSquareClick(row, col) {
             @include button-base;
             font-size: 2em;
             padding: $spacing-md;
+        }
+    }
+
+    .board-and-pieces {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+    }
+
+    .captured-bar {
+        display: flex;
+        align-items: center;
+        min-height: 40px;
+        padding: 4px 8px;
+        gap: 8px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-color);
+        border-radius: $border-radius;
+        width: $board-size;
+        align-self: flex-end;
+
+        .captured-piece {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+
+            .piece {
+                font-size: 1.5em;
+                transition: transform 0.2s ease;
+                cursor: default;
+
+                &:hover {
+                    transform: scale(1.2);
+                }
+            }
+
+            .count {
+                position: absolute;
+                bottom: -4px;
+                right: -4px;
+                background: var(--bg-primary);
+                border-radius: 50%;
+                width: 16px;
+                height: 16px;
+                font-size: 0.7em;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                border: 1px solid var(--border-color);
+            }
+        }
+
+        &.white .piece {
+            color: var(--piece-black);
+        }
+
+        &.black .piece {
+            color: var(--piece-white);
+        }
+
+        .material-advantage {
+            margin-left: auto;
+            padding: 2px 8px;
+            background: var(--bg-primary);
+            border-radius: $border-radius;
+            font-weight: 500;
+            font-size: 0.9em;
         }
     }
 
@@ -1692,6 +1911,15 @@ async function handleSquareClick(row, col) {
             width: 100%;
             max-width: $board-size;
             max-height: 200px;
+        }
+
+        .board-and-pieces {
+            width: 100%;
+            max-width: $board-size;
+        }
+
+        .captured-bar {
+            width: 100%;
         }
     }
 </style>
