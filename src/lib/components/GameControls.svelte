@@ -136,7 +136,6 @@
     .game-controls {
         display: flex;
         gap: $spacing-md;
-        margin-bottom: $spacing-md;
         align-items: center;
         width: 100%;
         justify-content: space-between;
@@ -158,6 +157,10 @@
         }
     }
 
+    :global(.dropdown-trigger) {
+        margin-left: auto;
+    }
+
     .game-info {
         display: flex;
         gap: $spacing-md;
@@ -175,7 +178,7 @@
         }
     }
 
-    .dropdown-item {
+    :global(.dropdown-items .dropdown-item), .dropdown-item {
         width: 100%;
         text-align: left;
         padding: $spacing-sm $spacing-md;

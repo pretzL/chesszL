@@ -1226,12 +1226,21 @@
     .status {
         font-size: 1.2rem;
         font-weight: bold;
-        margin-bottom: $spacing-md;
         color: var(--text-primary);
         align-self: flex-start;
         padding: 2px 6px;
         border-radius: $border-radius;
         font-size: 0.8em;
+
+        &.available {
+            background: var(--success);
+            color: white;
+        }
+
+        &.playing {
+            background: var(--error);
+            color: white;
+        }
     }
 
     .ai-thinking {
@@ -1246,12 +1255,15 @@
         display: flex;
         gap: 4px;
         transition: transform 0.3s ease;
+        width: 100%;
+        max-width: $board-size;
     }
 
     .board-and-files {
         display: flex;
         flex-direction: column;
         gap: 4px;
+        flex-grow: 1;
     }
 
     .rank-markers {
@@ -1259,19 +1271,19 @@
         flex-direction: column;
         justify-content: space-around;
         padding: 2px 8px;
+        font-size: clamp(0.7em, 2vw, 0.9em);
     }
 
     .file-markers {
         display: flex;
         justify-content: space-around;
         padding: 4px 0;
+        font-size: clamp(0.7em, 2vw, 0.9em);
     }
 
     .rank-marker, .file-marker {
         color: var(--text-secondary);
-        font-size: 0.9em;
         font-family: monospace;
-        width: calc($board-size / 8 - 8px);
         text-align: center;
         user-select: none;
     }
@@ -1280,13 +1292,12 @@
         display: grid;
         grid-template-columns: repeat(8, 1fr);
         grid-template-rows: repeat(8, 1fr);
-        width: $board-size;
-        height: $board-size;
+        width: 100%;
+        aspect-ratio: 1 / 1;
         border: 2px solid var(--border-color);
         border-radius: $border-radius;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         position: relative;
-        box-sizing: content-box;
         transition: transform 0.3s ease;
     }
 
@@ -1294,7 +1305,7 @@
         display: flex;
         justify-content: center;
         align-items: center;
-        font-size: 2em;
+        font-size: clamp(1.5em, 4vw, 2em);
         cursor: pointer;
         transition: all 0.2s ease;
         aspect-ratio: 1 / 1;
@@ -1388,19 +1399,18 @@
         flex-direction: column;
         gap: 8px;
         align-items: center;
+        width: 100%;
+        max-width: $board-size;
     }
 
     .captured-bar {
-        display: flex;
-        align-items: center;
+        width: 100%;
         min-height: 40px;
         padding: 4px 8px;
         gap: 8px;
         background: var(--bg-secondary);
         border: 1px solid var(--border-color);
         border-radius: $border-radius;
-        width: $board-size;
-        align-self: flex-end;
 
         .captured-piece {
             position: relative;
@@ -1409,7 +1419,7 @@
             justify-content: center;
 
             .piece {
-                font-size: 1.5em;
+                font-size: clamp(1.2em, 3vw, 1.5em);
                 transition: transform 0.2s ease;
                 cursor: default;
 
@@ -1577,18 +1587,6 @@
 
         &:last-child {
             border-bottom: none;
-        }
-    }
-
-    .status {
-        &.available {
-            background: var(--success);
-            color: white;
-        }
-
-        &.playing {
-            background: var(--error);
-            color: white;
         }
     }
 
@@ -1780,17 +1778,6 @@
         }
     }
 
-    .board-and-pieces {
-        @media (max-width: $breakpoint-md) {
-            transform: scale(0.8);
-            transform-origin: top center;
-        }
-
-        @media (max-width: $breakpoint-sm) {
-            transform: scale(0.6);
-        }
-    }
-
     .game-container {
         @media (max-width: $breakpoint-md) {
             flex-direction: column;
@@ -1815,21 +1802,26 @@
         .game-container {
             flex-direction: column;
             align-items: center;
+            padding: $spacing-sm;
+            width: 100%;
+        }
+
+        .board-container {
+            max-width: min(100%, calc(100vh - 300px));
         }
 
         .move-history {
             width: 100%;
-            max-width: $board-size;
+            max-width: min(100%, calc(100vh - 300px));
             max-height: 200px;
         }
 
         .board-and-pieces {
-            width: 100%;
-            max-width: $board-size;
+            max-width: min(100%, calc(100vh - 300px));
         }
 
-        .captured-bar {
-            width: 100%;
+        .ghost-piece, .moving-piece {
+            font-size: clamp(1.5em, 4vw, 2em);
         }
     }
 </style>
