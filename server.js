@@ -1,12 +1,7 @@
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { nanoid } from "nanoid";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
 import express from "express";
-import { ChessEngine } from "./src/lib/game/ChessEngine.js";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Initialize server based on environment
 const app = express();
