@@ -1375,6 +1375,7 @@
     }
 
     .captured-bar {
+        display: flex;
         width: 100%;
         min-height: 40px;
         padding: 4px 8px;
@@ -1765,7 +1766,6 @@
     .captured-bar {
         @media (max-width: $breakpoint-md) {
             width: 100%;
-            justify-content: center;
         }
     }
 
