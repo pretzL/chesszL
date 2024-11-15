@@ -42,7 +42,6 @@
     let showMoveHighlight = $state(false);
     let ghostPiece = $state(null);
     let movingPiece = $state(null);
-    let localGameRotation = $state(false);
     let opponentDisconnected = $state(false);
     let disconnectionMessage = $state("");
     let lastCheck = $state(null);
@@ -126,10 +125,6 @@
         const nextPlayer = currentPlayer === "white" ? "black" : "white";
         currentPlayer = nextPlayer;
         selectedPiece = null;
-
-        if (gameMode === "local") {
-            localGameRotation = !localGameRotation;
-        }
 
         updateGameStatus();
     }
@@ -662,7 +657,7 @@
         promotionPending = null;
         statusMessage = "White's turn";
         gameResult = null;
-        localGameRotation = false;
+        playerColor = "white";
     }
 
     // Watch for player moves and respond with AI moves
@@ -1048,11 +1043,7 @@
                 <div class="rank-markers">
                     {#each Array(8) as _, index}
                         <div class="rank-marker">
-                            {#if gameMode === "local"}
-                                {localGameRotation ? index + 1 : 8 - index}
-                            {:else}
-                                {playerColor === "white" ? 8 - index : index + 1}
-                            {/if}
+                            {playerColor === "white" ? 8 - index : index + 1}
                         </div>
                     {/each}
                 </div>
@@ -1061,12 +1052,8 @@
                     <div class="board">
                         {#each engine.board as row, rowIndex}
                             {#each row as square, colIndex}
-                                {@const displayRowIndex = gameMode === "local" 
-                                    ? (localGameRotation ? 7 - rowIndex : rowIndex)
-                                    : (playerColor === "white" ? rowIndex : 7 - rowIndex)}
-                                {@const displayColIndex = gameMode === "local"
-                                    ? (localGameRotation ? 7 - colIndex : colIndex)
-                                    : (playerColor === "white" ? colIndex : 7 - colIndex)}
+                                {@const displayRowIndex = playerColor === "white" ? rowIndex : 7 - rowIndex}
+                                {@const displayColIndex = playerColor === "white" ? colIndex : 7 - colIndex}
                                 {@const isSelected = isSquareSelected(rowIndex, colIndex)}
                                 {@const isValidTarget = isValidMoveTarget(rowIndex, colIndex)}
                                 {@const isLastMove = showMoveHighlight && lastMove && 
@@ -1099,34 +1086,22 @@
                         {/each}
                         
                         {#if movingPiece}
-                            {@const displayFromRow = gameMode === "local"
-                                ? (localGameRotation ? 7 - movingPiece.fromRow : movingPiece.fromRow)
-                                : (playerColor === "white" ? movingPiece.fromRow : 7 - movingPiece.fromRow)}
-                            {@const displayFromCol = gameMode === "local"
-                                ? (localGameRotation ? 7 - movingPiece.fromCol : movingPiece.fromCol)
-                                : (playerColor === "white" ? movingPiece.fromCol : 7 - movingPiece.fromCol)}
-                            {@const displayToRow = gameMode === "local"
-                                ? (localGameRotation ? 7 - movingPiece.toRow : movingPiece.toRow)
-                                : (playerColor === "white" ? movingPiece.toRow : 7 - movingPiece.toRow)}
-                            {@const displayToCol = gameMode === "local"
-                                ? (localGameRotation ? 7 - movingPiece.toCol : movingPiece.toCol)
-                                : (playerColor === "white" ? movingPiece.toCol : 7 - movingPiece.toCol)}
+                            {@const displayFromRow = playerColor === "white" ? movingPiece.fromRow : 7 - movingPiece.fromRow}
+                            {@const displayFromCol = playerColor === "white" ? movingPiece.fromCol : 7 - movingPiece.fromCol}
+                            {@const displayToRow = playerColor === "white" ? movingPiece.toRow : 7 - movingPiece.toRow}
+                            {@const displayToCol = playerColor === "white" ? movingPiece.toCol : 7 - movingPiece.toCol}
                             <div 
                                 class="moving-piece"
                                 style="--start-row: {displayFromRow}; --start-col: {displayFromCol}; 
-                                       --end-row: {displayToRow}; --end-col: {displayToCol};"
+                                    --end-row: {displayToRow}; --end-col: {displayToCol};"
                             >
                                 {movingPiece.piece}
                             </div>
                         {/if}
 
                         {#if ghostPiece}
-                            {@const displayFromRow = gameMode === "local"
-                                ? (localGameRotation ? 7 - ghostPiece.fromRow : ghostPiece.fromRow)
-                                : (playerColor === "white" ? ghostPiece.fromRow : 7 - ghostPiece.fromRow)}
-                            {@const displayFromCol = gameMode === "local"
-                                ? (localGameRotation ? 7 - ghostPiece.fromCol : ghostPiece.fromCol)
-                                : (playerColor === "white" ? ghostPiece.fromCol : 7 - ghostPiece.fromCol)}
+                            {@const displayFromRow = playerColor === "white" ? ghostPiece.fromRow : 7 - ghostPiece.fromRow}
+                            {@const displayFromCol = playerColor === "white" ? ghostPiece.fromCol : 7 - ghostPiece.fromCol}
                             <div 
                                 class="ghost-piece"
                                 style="--row: {displayFromRow}; --col: {displayFromCol}"
@@ -1139,11 +1114,7 @@
                     <div class="file-markers">
                         {#each Array(8) as _, index}
                             <div class="file-marker">
-                                {#if gameMode === "local"}
-                                    {String.fromCharCode(97 + (localGameRotation ? 7 - index : index)).toUpperCase()}
-                                {:else}
-                                    {String.fromCharCode(97 + (playerColor === "white" ? index : 7 - index)).toUpperCase()}
-                                {/if}
+                                {String.fromCharCode(97 + (playerColor === "white" ? index : 7 - index)).toUpperCase()}
                             </div>
                         {/each}
                     </div>
