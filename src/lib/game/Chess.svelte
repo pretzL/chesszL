@@ -47,7 +47,7 @@
     let lastCheck = $state(null);
     let capturedPieces = $state({
         byWhite: {},
-        byBlack: {}
+        byBlack: {},
     });
     let materialAdvantage = $derived(calculateMaterialAdvantage());
 
@@ -69,7 +69,7 @@
         const inCheck = engine.isInCheck(currentPlayer);
         if (inCheck) {
             statusMessage = `${currentPlayer === "white" ? "White" : "Black"} is in check!`;
-            
+
             const [kingRow, kingCol] = engine.findKing(currentPlayer);
             lastCheck = { row: kingRow, col: kingCol };
         } else {
@@ -80,20 +80,25 @@
 
     function calculateMaterialAdvantage() {
         const pieceValues = {
-            '♙': 1, '♟': 1,  // pawns
-            '♘': 3, '♞': 3,  // knights
-            '♗': 3, '♝': 3,  // bishops
-            '♖': 5, '♜': 5,  // rooks
-            '♕': 9, '♛': 9   // queens
+            "♙": 1,
+            "♟": 1, // pawns
+            "♘": 3,
+            "♞": 3, // knights
+            "♗": 3,
+            "♝": 3, // bishops
+            "♖": 5,
+            "♜": 5, // rooks
+            "♕": 9,
+            "♛": 9, // queens
         };
 
         let whiteAdvantage = 0;
-        
+
         // Add value of pieces white has captured
         for (const [piece, count] of Object.entries(capturedPieces.byWhite)) {
             whiteAdvantage += (pieceValues[piece] || 0) * count;
         }
-        
+
         // Subtract value of pieces black has captured
         for (const [piece, count] of Object.entries(capturedPieces.byBlack)) {
             whiteAdvantage -= (pieceValues[piece] || 0) * count;
@@ -144,20 +149,20 @@
         const nextPlayer = currentPlayer === "white" ? "black" : "white";
         const tempEngine = new ChessEngine(newBoard);
         const newStatus = tempEngine.getGameStatus(nextPlayer);
-        
+
         if (newStatus === "checkmate") {
             gameStatus = "ended";
             const winner = currentPlayer;
             gameResult = {
                 winner,
-                reason: `${winner === "white" ? "White" : "Black"} wins by checkmate!`
+                reason: `${winner === "white" ? "White" : "Black"} wins by checkmate!`,
             };
             return "checkmate";
         } else if (newStatus === "stalemate") {
             gameStatus = "ended";
             gameResult = {
                 winner: null,
-                reason: "Game drawn by stalemate"
+                reason: "Game drawn by stalemate",
             };
             return "stalemate";
         } else if (newStatus === "check") {
@@ -167,59 +172,71 @@
     }
 
     async function makeAIMove() {
-    if (!promotionPending && (gameStatus === "active" || gameStatus === "check")) {
-        isAIThinking = true;
+        if (!promotionPending && (gameStatus === "active" || gameStatus === "check")) {
+            isAIThinking = true;
 
-        try {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-            const move = ai.getBestMove();
+            try {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                const move = ai.getBestMove();
 
-            if (move) {
-                const piece = engine.board[move.fromRow][move.fromCol].piece;
-                
-                movingPiece = {
-                    piece,
-                    fromRow: move.fromRow,
-                    fromCol: move.fromCol,
-                    toRow: move.toRow,
-                    toCol: move.toCol
-                };
+                if (move) {
+                    const piece = engine.board[move.fromRow][move.fromCol].piece;
+                    const targetSquare = engine.board[move.toRow][move.toCol];
 
-                await new Promise(resolve => setTimeout(resolve, 300));
+                    // Check for capture by AI
+                    if (targetSquare.piece) {
+                        if (currentPlayer === "white") {
+                            capturedPieces.byWhite[targetSquare.piece] =
+                                (capturedPieces.byWhite[targetSquare.piece] || 0) + 1;
+                        } else {
+                            capturedPieces.byBlack[targetSquare.piece] =
+                                (capturedPieces.byBlack[targetSquare.piece] || 0) + 1;
+                        }
+                    }
 
-                const result = engine.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
-                movingPiece = null;
-                lastMove = { 
-                    fromRow: move.fromRow, 
-                    fromCol: move.fromCol, 
-                    toRow: move.toRow, 
-                    toCol: move.toCol 
-                };
+                    movingPiece = {
+                        piece,
+                        fromRow: move.fromRow,
+                        fromCol: move.fromCol,
+                        toRow: move.toRow,
+                        toCol: move.toCol,
+                    };
 
-                engine = new ChessEngine(result.board);
-                updateMoveHistory(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                    await new Promise((resolve) => setTimeout(resolve, 300));
 
-                if (result.needsPromotion) {
-                    const promotionPiece = currentPlayer === "white" ? "♕" : "♛";
-                    handlePromotion(promotionPiece);
+                    const result = engine.makeMove(move.fromRow, move.fromCol, move.toRow, move.toCol);
+                    movingPiece = null;
+                    lastMove = {
+                        fromRow: move.fromRow,
+                        fromCol: move.fromCol,
+                        toRow: move.toRow,
+                        toCol: move.toCol,
+                    };
+
+                    engine = new ChessEngine(result.board);
+                    updateMoveHistory(move.fromRow, move.fromCol, move.toRow, move.toCol);
+
+                    if (result.needsPromotion) {
+                        const promotionPiece = currentPlayer === "white" ? "♕" : "♛";
+                        handlePromotion(promotionPiece);
+                    } else {
+                        finishMove();
+                    }
+
+                    ai = new ChessAI(engine, difficulty, playerColor === "white" ? "black" : "white");
                 } else {
-                    finishMove();
+                    gameStatus = engine.isInCheck(currentPlayer) ? "checkmate" : "stalemate";
+                    updateGameStatus();
                 }
-
-                ai = new ChessAI(engine, difficulty, playerColor === "white" ? "black" : "white");
-            } else {
-                gameStatus = engine.isInCheck(currentPlayer) ? "checkmate" : "stalemate";
+            } catch (error) {
+                gameStatus = "checkmate";
+                console.error("Error making AI move:", error);
                 updateGameStatus();
+            } finally {
+                isAIThinking = false;
             }
-        } catch (error) {
-            gameStatus = "checkmate";
-            console.error("Error making AI move:", error);
-            updateGameStatus();
-        } finally {
-            isAIThinking = false;
         }
     }
-}
 
     async function handleSquareClick(row, col) {
         if (
@@ -244,26 +261,29 @@
                     const piece = engine.board[selectedRow][selectedCol].piece;
                     const pieceColor = engine.board[selectedRow][selectedCol].color;
                     const targetSquare = engine.board[row][col];
-                    
+
                     let capturedPiece = null;
-                    
+
+                    // Check for normal capture
                     if (targetSquare.piece && targetSquare.color !== pieceColor) {
                         capturedPiece = targetSquare.piece;
                     }
-                    
-                    // En passant
-                    if (!capturedPiece &&
-                        engine.getPieceType(piece) === 'pawn' &&
+
+                    // Check for en passant capture
+                    if (
+                        !capturedPiece &&
+                        engine.getPieceType(piece) === "pawn" &&
                         Math.abs(selectedCol - col) === 1 &&
-                        !targetSquare.piece) {
-                        
+                        !targetSquare.piece
+                    ) {
                         const lastMove = engine.lastMove;
-                        if (lastMove &&
-                            engine.getPieceType(engine.board[lastMove.toRow][lastMove.toCol].piece) === 'pawn' &&
+                        if (
+                            lastMove &&
+                            engine.getPieceType(engine.board[lastMove.toRow][lastMove.toCol].piece) === "pawn" &&
                             Math.abs(lastMove.fromRow - lastMove.toRow) === 2 &&
                             lastMove.toRow === selectedRow &&
-                            lastMove.toCol === col) {
-                            
+                            lastMove.toCol === col
+                        ) {
                             capturedPiece = engine.board[lastMove.toRow][lastMove.toCol].piece;
                         }
                     }
@@ -273,20 +293,20 @@
                         fromRow: selectedRow,
                         fromCol: selectedCol,
                         toRow: row,
-                        toCol: col
+                        toCol: col,
                     };
 
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    
+                    await new Promise((resolve) => setTimeout(resolve, 300));
+
                     const result = engine.makeMove(selectedRow, selectedCol, row, col);
                     movingPiece = null;
-                    
-                    lastMove = { 
-                        fromRow: selectedRow, 
-                        fromCol: selectedCol, 
-                        toRow: row, 
+
+                    lastMove = {
+                        fromRow: selectedRow,
+                        fromCol: selectedCol,
+                        toRow: row,
                         toCol: col,
-                        piece: piece
+                        piece: piece,
                     };
                     selectedHistoryMove = null;
 
@@ -299,19 +319,19 @@
                             newBoard: result.board,
                             piece: piece,
                             capturedPiece,
-                            capturedBy: currentPlayer
+                            capturedBy: currentPlayer,
                         };
 
                         gameClient.makeMove(moveData);
                         selectedPiece = null;
                     } else {
-                        // Local game logic for AI/local multiplayer
+                        // Update captured pieces for both AI and local modes
                         if (capturedPiece) {
-                            if (currentPlayer === 'white') {
-                                capturedPieces.byWhite[capturedPiece] = 
+                            if (currentPlayer === "white") {
+                                capturedPieces.byWhite[capturedPiece] =
                                     (capturedPieces.byWhite[capturedPiece] || 0) + 1;
                             } else {
-                                capturedPieces.byBlack[capturedPiece] = 
+                                capturedPieces.byBlack[capturedPiece] =
                                     (capturedPieces.byBlack[capturedPiece] || 0) + 1;
                             }
                         }
@@ -365,7 +385,7 @@
             toRow,
             toCol,
             piece: move.piece,
-            moveNumber: reversedMoveHistory.length - index
+            moveNumber: reversedMoveHistory.length - index,
         };
 
         ghostPiece = {
@@ -373,7 +393,7 @@
             fromRow,
             fromCol,
             toRow,
-            toCol
+            toCol,
         };
     }
 
@@ -432,7 +452,7 @@
             gameStatus = "ended";
             gameResult = {
                 winner,
-                reason: `White resigned. Black wins!`
+                reason: `White resigned. Black wins!`,
             };
             statusMessage = gameResult.reason;
         }
@@ -477,7 +497,7 @@
         gameResult = null;
         capturedPieces = {
             byWhite: {},
-            byBlack: {}
+            byBlack: {},
         };
         clearHistorySelection();
 
@@ -509,23 +529,22 @@
     function handleGameUpdate(gameState) {
         engine = new ChessEngine(gameState.board);
         currentPlayer = gameState.currentPlayer;
-        
+
         if (gameState.captures) {
             capturedPieces = {
                 byWhite: { ...gameState.captures.byWhite },
-                byBlack: { ...gameState.captures.byBlack }
+                byBlack: { ...gameState.captures.byBlack },
             };
         }
 
         if (gameState.moveHistory) {
             moveHistory = gameState.moveHistory.map((move) => ({
                 ...move,
-                from: move.from?.row !== undefined
-                    ? `${String.fromCharCode(97 + move.from.col)}${8 - move.from.row}`
-                    : move.from,
-                to: move.to?.row !== undefined
-                    ? `${String.fromCharCode(97 + move.to.col)}${8 - move.to.row}`
-                    : move.to,
+                from:
+                    move.from?.row !== undefined
+                        ? `${String.fromCharCode(97 + move.from.col)}${8 - move.from.row}`
+                        : move.from,
+                to: move.to?.row !== undefined ? `${String.fromCharCode(97 + move.to.col)}${8 - move.to.row}` : move.to,
                 player: move.player || (currentPlayer === "white" ? "black" : "white"),
             }));
         }
@@ -538,15 +557,15 @@
         gameStatus = "ended";
         statusMessage = reason;
         clearHistorySelection();
-        
+
         if (reason.includes("resigned")) {
             const winner = reason.includes("white wins") ? "white" : "black";
-            gameResult = { 
+            gameResult = {
                 winner,
-                reason
+                reason,
             };
         }
-        
+
         if (gameMode === "multiplayer") {
             opponent = null;
             playerColor = null;
@@ -612,7 +631,7 @@
         if (gameClient) {
             gameClient.send({
                 type: "create_game",
-                preferredColor: playerPreferredColor
+                preferredColor: playerPreferredColor,
             });
         }
     }
@@ -638,11 +657,11 @@
         promotionPending = null;
         statusMessage = "White's turn";
         gameResult = null;
-        
+
         playerColor = playerPreferredColor;
         isAIThinking = false;
         ai = new ChessAI(engine, difficulty, playerColor === "white" ? "black" : "white");
-        
+
         if (playerPreferredColor === "black") {
             makeAIMove();
         }
@@ -683,7 +702,7 @@
         if (gameStatus === "ended" && gameResult) {
             showGameResultModal = true;
         }
-    })
+    });
 
     let isMobile = $state(false);
     $effect(() => {
@@ -712,125 +731,121 @@
 </script>
 
 {#snippet drawOfferModalContent()}
-<div class="draw-offer-modal-content">
-    {#if drawOffer && ((drawOffer.offeredBy === "white" && playerColor === "black") || 
-                      (drawOffer.offeredBy === "black" && playerColor === "white"))}
-        <p>Your opponent has offered a draw. Do you accept?</p>
-        <div class="modal-buttons">
-            <button
-                class="ui-button decline-draw"
-                onclick={() => {
-                    handleDrawResponse(false);
-                    showDrawOfferModal = false;
-                }}
-            >
-                Decline
-            </button>
-            <button
-                class="ui-button accept-draw"
-                onclick={() => {
-                    handleDrawResponse(true);
-                    showDrawOfferModal = false;
-                }}
-            >
-                Accept Draw
-            </button>
-        </div>
-    {:else}
-        <p>Are you sure you want to offer a draw to your opponent?</p>
-        <div class="modal-buttons">
-            <button
-                class="ui-button cancel-draw"
-                onclick={() => showDrawOfferModal = false}
-            >
-                Cancel
-            </button>
-            <button
-                class="ui-button confirm-draw"
-                onclick={() => {
-                    gameClient.offerDraw();
-                    showDrawOfferModal = false;
-                }}
-            >
-                Yes, Offer Draw
-            </button>
-        </div>
-    {/if}
-</div>
+    <div class="draw-offer-modal-content">
+        {#if drawOffer && ((drawOffer.offeredBy === "white" && playerColor === "black") || (drawOffer.offeredBy === "black" && playerColor === "white"))}
+            <p>Your opponent has offered a draw. Do you accept?</p>
+            <div class="modal-buttons">
+                <button
+                    class="ui-button decline-draw"
+                    onclick={() => {
+                        handleDrawResponse(false);
+                        showDrawOfferModal = false;
+                    }}
+                >
+                    Decline
+                </button>
+                <button
+                    class="ui-button accept-draw"
+                    onclick={() => {
+                        handleDrawResponse(true);
+                        showDrawOfferModal = false;
+                    }}
+                >
+                    Accept Draw
+                </button>
+            </div>
+        {:else}
+            <p>Are you sure you want to offer a draw to your opponent?</p>
+            <div class="modal-buttons">
+                <button
+                    class="ui-button cancel-draw"
+                    onclick={() => (showDrawOfferModal = false)}
+                >
+                    Cancel
+                </button>
+                <button
+                    class="ui-button confirm-draw"
+                    onclick={() => {
+                        gameClient.offerDraw();
+                        showDrawOfferModal = false;
+                    }}
+                >
+                    Yes, Offer Draw
+                </button>
+            </div>
+        {/if}
+    </div>
 {/snippet}
 
 <Modal
     bind:showModal={showDrawOfferModal}
     title={drawOffer ? "Draw Offered" : "Offer Draw"}
     content={drawOfferModalContent}
->
-</Modal>
+></Modal>
 
 {#snippet resignModalContent()}
-<div class="resign-modal-content">
-    <p>Are you sure you want to resign this game? This action cannot be undone.</p>
-    <div class="modal-buttons">
-        <button
-            class="ui-button cancel-resign"
-            onclick={() => (showResignModal = false)}
+    <div class="resign-modal-content">
+        <p>Are you sure you want to resign this game? This action cannot be undone.</p>
+        <div class="modal-buttons">
+            <button
+                class="ui-button cancel-resign"
+                onclick={() => (showResignModal = false)}
             >
-            Cancel
-        </button>
-        <button
-            class="ui-button confirm-resign"
-            onclick={confirmResign}
-        >
-            Yes, Resign
-        </button>
+                Cancel
+            </button>
+            <button
+                class="ui-button confirm-resign"
+                onclick={confirmResign}
+            >
+                Yes, Resign
+            </button>
+        </div>
     </div>
-</div>
 {/snippet}
 
 <Modal
     bind:showModal={showResignModal}
     title="Confirm Resignation"
     content={resignModalContent}
->
-</Modal>
+></Modal>
 
 {#snippet gameResultModalContent()}
-<div class="game-end-modal-content">
-    <p>{gameResult.reason}</p>
-    <div class="modal-buttons">
-        <button 
-            class="ui-button new-game"
-            onclick={() => {
-                gameStatus = "active";
-                gameResult = null;
-                resetGame();
-            }}
-        >
-            New Game
-        </button>
-        <button 
-            class="ui-button return-lobby"
-            onclick={() => {
-                gameMode = null;
-                gameStatus = "active";
-                gameResult = null;
-                opponent = null;
-                playerColor = null;
-                resetGame();
-            }}
-        >
-            Return to Lobby
-        </button>
+    <div class="game-end-modal-content">
+        <p>{gameResult.reason}</p>
+        <div class="modal-buttons">
+            <button
+                class="ui-button new-game"
+                onclick={() => {
+                    gameStatus = "active";
+                    gameResult = null;
+                    resetGame();
+                }}
+            >
+                New Game
+            </button>
+            <button
+                class="ui-button return-lobby"
+                onclick={() => {
+                    gameMode = null;
+                    gameStatus = "active";
+                    gameResult = null;
+                    opponent = null;
+                    playerColor = null;
+                    resetGame();
+                }}
+            >
+                Return to Lobby
+            </button>
+        </div>
     </div>
-</div>
 {/snippet}
 
 {#if gameStatus === "ended" && gameResult}
-    <Modal 
+    <Modal
         bind:showModal={showGameResultModal}
         title="Game Over"
         content={gameResultModalContent}
-    >
-    </Modal>
+    ></Modal>
 {/if}
 
 {#snippet themeButton(elementClass)}
@@ -863,44 +878,47 @@
         {@render backButton("ui-button back-button")}
     {/if}
     {#if !gameMode}
-    <div class="mode-select">
-        <h2>Select Game Mode</h2>
-        <div class="game-options">
-            <div class="color-preference">
-                <label for="color-select" class="color-label">Preferred Color:</label>
-                <select 
-                    id="color-select"
-                    bind:value={playerPreferredColor}
-                >
-                    <option value="white">White</option>
-                    <option value="black">Black</option>
-                </select>
-            </div>
-            <div class="mode-buttons">
-                <button
-                    class="ui-button mode-button"
-                    class:selected={gameMode === "ai"}
-                    onclick={() => switchGameMode("ai")}
-                >
-                    Play vs AI
-                </button>
-                <button
-                    class="ui-button mode-button"
-                    class:selected={gameMode === "multiplayer"}
-                    onclick={() => switchGameMode("multiplayer")}
-                >
-                    Online Multiplayer
-                </button>
-                <button
-                    class="ui-button mode-button"
-                    class:selected={gameMode === "local"}
-                    onclick={() => switchGameMode("local")}
-                >
-                    Local Multiplayer
-                </button>
+        <div class="mode-select">
+            <h2>Select Game Mode</h2>
+            <div class="game-options">
+                <div class="color-preference">
+                    <label
+                        for="color-select"
+                        class="color-label">Preferred Color:</label
+                    >
+                    <select
+                        id="color-select"
+                        bind:value={playerPreferredColor}
+                    >
+                        <option value="white">White</option>
+                        <option value="black">Black</option>
+                    </select>
+                </div>
+                <div class="mode-buttons">
+                    <button
+                        class="ui-button mode-button"
+                        class:selected={gameMode === "ai"}
+                        onclick={() => switchGameMode("ai")}
+                    >
+                        Play vs AI
+                    </button>
+                    <button
+                        class="ui-button mode-button"
+                        class:selected={gameMode === "multiplayer"}
+                        onclick={() => switchGameMode("multiplayer")}
+                    >
+                        Online Multiplayer
+                    </button>
+                    <button
+                        class="ui-button mode-button"
+                        class:selected={gameMode === "local"}
+                        onclick={() => switchGameMode("local")}
+                    >
+                        Local Multiplayer
+                    </button>
+                </div>
             </div>
         </div>
-    </div>
     {:else if gameMode === "multiplayer" && !gameClient}
         <div class="mode-select">
             <h2>Enter Username</h2>
@@ -939,8 +957,8 @@
                     <button
                         class="ui-button create-game"
                         onclick={createGame}
-                        disabled={availableGames.some(game => 
-                            game.white?.username === username || game.black?.username === username
+                        disabled={availableGames.some(
+                            (game) => game.white?.username === username || game.black?.username === username
                         )}
                     >
                         Create New Game
@@ -989,8 +1007,8 @@
             onDifficultyChange={handleDifficultyChange}
             onNewGame={resetGame}
             onResign={handleResignClick}
-            onDrawOffer={() => showDrawOfferModal = true}
-            onToggleMoveHighlight={() => showMoveHighlight = !showMoveHighlight}
+            onDrawOffer={() => (showDrawOfferModal = true)}
+            onToggleMoveHighlight={() => (showMoveHighlight = !showMoveHighlight)}
         />
 
         <div class="status">{statusMessage}</div>
@@ -1019,7 +1037,7 @@
             {/if}
             <div class="board-and-pieces">
                 <div class="captured-bar {playerColor === 'white' ? 'black' : 'white'}">
-                    {#each Object.entries(playerColor === 'white' ? capturedPieces.byBlack : capturedPieces.byWhite) as [piece, count]}
+                    {#each Object.entries(playerColor === "white" ? capturedPieces.byBlack : capturedPieces.byWhite) as [piece, count]}
                         <div class="captured-piece">
                             <span class="piece">{piece}</span>
                             {#if count > 1}
@@ -1027,119 +1045,135 @@
                             {/if}
                         </div>
                     {/each}
-                    {#if materialAdvantage * (playerColor === 'white' ? -1 : 1) > 0}
+                    {#if materialAdvantage * (playerColor === "white" ? -1 : 1) > 0}
                         <span class="material-advantage">+{Math.abs(materialAdvantage)}</span>
                     {/if}
                 </div>
-            <!-- svelte-ignore a11y_click_events_have_key_events -->
-            <div class="board-container" onclick={(e) => {
-                if (e.target.classList.contains('board-container')) {
-                    clearHistorySelection();
-                }
-            }}
-            tabindex="0"
-            role="button"
-            >
-                <div class="rank-markers">
-                    {#each Array(8) as _, index}
-                        <div class="rank-marker">
-                            {playerColor === "white" ? 8 - index : index + 1}
-                        </div>
-                    {/each}
-                </div>
-            
-                <div class="board-and-files">
-                    <div class="board">
-                        {#each engine.board as row, rowIndex}
-                            {#each row as square, colIndex}
-                                {@const displayRowIndex = playerColor === "white" ? rowIndex : 7 - rowIndex}
-                                {@const displayColIndex = playerColor === "white" ? colIndex : 7 - colIndex}
-                                {@const isSelected = isSquareSelected(rowIndex, colIndex)}
-                                {@const isValidTarget = isValidMoveTarget(rowIndex, colIndex)}
-                                {@const isLastMove = showMoveHighlight && lastMove && 
-                                    ((lastMove.fromRow === rowIndex && lastMove.fromCol === colIndex) ||
-                                    (lastMove.toRow === rowIndex && lastMove.toCol === colIndex))}
-                                {@const isHistoryMove = selectedHistoryMove && 
-                                    ((selectedHistoryMove.fromRow === rowIndex && selectedHistoryMove.fromCol === colIndex) ||
-                                    (selectedHistoryMove.toRow === rowIndex && selectedHistoryMove.toCol === colIndex))}
-                                {@const isInCheck = lastCheck && lastCheck.row === rowIndex && lastCheck.col === colIndex}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <div
+                    class="board-container"
+                    onclick={(e) => {
+                        if (e.target.classList.contains("board-container")) {
+                            clearHistorySelection();
+                        }
+                    }}
+                    tabindex="0"
+                    role="button"
+                >
+                    <div class="rank-markers">
+                        {#each Array(8) as _, index}
+                            <div class="rank-marker">
+                                {playerColor === "white" ? 8 - index : index + 1}
+                            </div>
+                        {/each}
+                    </div>
+
+                    <div class="board-and-files">
+                        <div class="board">
+                            {#each engine.board as row, rowIndex}
+                                {#each row as square, colIndex}
+                                    {@const displayRowIndex = playerColor === "white" ? rowIndex : 7 - rowIndex}
+                                    {@const displayColIndex = playerColor === "white" ? colIndex : 7 - colIndex}
+                                    {@const isSelected = isSquareSelected(rowIndex, colIndex)}
+                                    {@const isValidTarget = isValidMoveTarget(rowIndex, colIndex)}
+                                    {@const isLastMove =
+                                        showMoveHighlight &&
+                                        lastMove &&
+                                        ((lastMove.fromRow === rowIndex && lastMove.fromCol === colIndex) ||
+                                            (lastMove.toRow === rowIndex && lastMove.toCol === colIndex))}
+                                    {@const isHistoryMove =
+                                        selectedHistoryMove &&
+                                        ((selectedHistoryMove.fromRow === rowIndex &&
+                                            selectedHistoryMove.fromCol === colIndex) ||
+                                            (selectedHistoryMove.toRow === rowIndex &&
+                                                selectedHistoryMove.toCol === colIndex))}
+                                    {@const isInCheck =
+                                        lastCheck && lastCheck.row === rowIndex && lastCheck.col === colIndex}
+                                    <div
+                                        class="square {getSquareColor(displayRowIndex, displayColIndex)}"
+                                        class:selected={isSelected}
+                                        class:valid-move={isValidTarget}
+                                        class:last-move={isLastMove}
+                                        class:history-move={isHistoryMove}
+                                        class:in-check={isInCheck}
+                                        onclick={() => handleSquareClick(rowIndex, colIndex)}
+                                        onkeypress={(e) => {
+                                            if (e.key === "Enter") handleSquareClick(rowIndex, colIndex);
+                                        }}
+                                        tabindex="0"
+                                        role="button"
+                                        style="grid-row: {displayRowIndex + 1}; grid-column: {displayColIndex + 1}"
+                                    >
+                                        {#if !(movingPiece && rowIndex === movingPiece.fromRow && colIndex === movingPiece.fromCol)}
+                                            {square.piece}
+                                        {/if}
+                                    </div>
+                                {/each}
+                            {/each}
+
+                            {#if movingPiece}
+                                {@const displayFromRow =
+                                    playerColor === "white" ? movingPiece.fromRow : 7 - movingPiece.fromRow}
+                                {@const displayFromCol =
+                                    playerColor === "white" ? movingPiece.fromCol : 7 - movingPiece.fromCol}
+                                {@const displayToRow =
+                                    playerColor === "white" ? movingPiece.toRow : 7 - movingPiece.toRow}
+                                {@const displayToCol =
+                                    playerColor === "white" ? movingPiece.toCol : 7 - movingPiece.toCol}
                                 <div
-                                    class="square {getSquareColor(displayRowIndex, displayColIndex)}"
-                                    class:selected={isSelected}
-                                    class:valid-move={isValidTarget}
-                                    class:last-move={isLastMove}
-                                    class:history-move={isHistoryMove}
-                                    class:in-check={isInCheck}
-                                    onclick={() => handleSquareClick(rowIndex, colIndex)}
-                                    onkeypress={(e) => {
-                                        if (e.key === "Enter") handleSquareClick(rowIndex, colIndex);
-                                    }}
-                                    tabindex="0"
-                                    role="button"
-                                    style="grid-row: {displayRowIndex + 1}; grid-column: {displayColIndex + 1}"
+                                    class="moving-piece"
+                                    style="--start-row: {displayFromRow}; --start-col: {displayFromCol}; 
+                                    --end-row: {displayToRow}; --end-col: {displayToCol};"
                                 >
-                                    {#if !(movingPiece && rowIndex === movingPiece.fromRow && colIndex === movingPiece.fromCol)}
-                                        {square.piece}
-                                    {/if}
+                                    {movingPiece.piece}
+                                </div>
+                            {/if}
+
+                            {#if ghostPiece}
+                                {@const displayFromRow =
+                                    playerColor === "white" ? ghostPiece.fromRow : 7 - ghostPiece.fromRow}
+                                {@const displayFromCol =
+                                    playerColor === "white" ? ghostPiece.fromCol : 7 - ghostPiece.fromCol}
+                                <div
+                                    class="ghost-piece"
+                                    style="--row: {displayFromRow}; --col: {displayFromCol}"
+                                >
+                                    {ghostPiece.piece}
+                                </div>
+                            {/if}
+                        </div>
+
+                        <div class="file-markers">
+                            {#each Array(8) as _, index}
+                                <div class="file-marker">
+                                    {String.fromCharCode(
+                                        97 + (playerColor === "white" ? index : 7 - index)
+                                    ).toUpperCase()}
                                 </div>
                             {/each}
-                        {/each}
-                        
-                        {#if movingPiece}
-                            {@const displayFromRow = playerColor === "white" ? movingPiece.fromRow : 7 - movingPiece.fromRow}
-                            {@const displayFromCol = playerColor === "white" ? movingPiece.fromCol : 7 - movingPiece.fromCol}
-                            {@const displayToRow = playerColor === "white" ? movingPiece.toRow : 7 - movingPiece.toRow}
-                            {@const displayToCol = playerColor === "white" ? movingPiece.toCol : 7 - movingPiece.toCol}
-                            <div 
-                                class="moving-piece"
-                                style="--start-row: {displayFromRow}; --start-col: {displayFromCol}; 
-                                    --end-row: {displayToRow}; --end-col: {displayToCol};"
-                            >
-                                {movingPiece.piece}
-                            </div>
-                        {/if}
-
-                        {#if ghostPiece}
-                            {@const displayFromRow = playerColor === "white" ? ghostPiece.fromRow : 7 - ghostPiece.fromRow}
-                            {@const displayFromCol = playerColor === "white" ? ghostPiece.fromCol : 7 - ghostPiece.fromCol}
-                            <div 
-                                class="ghost-piece"
-                                style="--row: {displayFromRow}; --col: {displayFromCol}"
-                            >
-                                {ghostPiece.piece}
-                            </div>
-                        {/if}
-                    </div>
-            
-                    <div class="file-markers">
-                        {#each Array(8) as _, index}
-                            <div class="file-marker">
-                                {String.fromCharCode(97 + (playerColor === "white" ? index : 7 - index)).toUpperCase()}
-                            </div>
-                        {/each}
+                        </div>
                     </div>
                 </div>
+                <div class="captured-bar {playerColor === 'white' ? 'white' : 'black'}">
+                    {#each Object.entries(playerColor === "white" ? capturedPieces.byWhite : capturedPieces.byBlack) as [piece, count]}
+                        <div class="captured-piece">
+                            <span class="piece">{piece}</span>
+                            {#if count > 1}
+                                <span class="count">{count}</span>
+                            {/if}
+                        </div>
+                    {/each}
+                    {#if materialAdvantage * (playerColor === "white" ? 1 : -1) > 0}
+                        <span class="material-advantage">+{Math.abs(materialAdvantage)}</span>
+                    {/if}
+                </div>
             </div>
-            <div class="captured-bar {playerColor === 'white' ? 'white' : 'black'}">
-                {#each Object.entries(playerColor === 'white' ? capturedPieces.byWhite : capturedPieces.byBlack) as [piece, count]}
-                    <div class="captured-piece">
-                        <span class="piece">{piece}</span>
-                        {#if count > 1}
-                            <span class="count">{count}</span>
-                        {/if}
-                    </div>
-                {/each}
-                {#if materialAdvantage * (playerColor === 'white' ? 1 : -1) > 0}
-                    <span class="material-advantage">+{Math.abs(materialAdvantage)}</span>
-                {/if}
-            </div>
-        </div>
 
             <div class="move-history">
                 <h3>Move History</h3>
                 <div class="moves">
                     {#each reversedMoveHistory as move, i}
-                        <div 
+                        <div
                             class="move"
                             class:selected={selectedHistoryMove?.moveNumber === reversedMoveHistory.length - i}
                             onclick={() => handleHistoryMoveClick(move, i)}
@@ -1172,7 +1206,7 @@
         background-color: var(--bg-primary);
         color: var(--text-primary);
         min-height: 100vh;
-    } 
+    }
 
     .game-info {
         display: flex;
@@ -1252,7 +1286,8 @@
         font-size: clamp(0.7em, 2vw, 0.9em);
     }
 
-    .rank-marker, .file-marker {
+    .rank-marker,
+    .file-marker {
         color: var(--text-secondary);
         font-family: monospace;
         text-align: center;
@@ -1337,10 +1372,7 @@
         height: calc(100% / 8);
         opacity: 0.5;
         pointer-events: none;
-        transform: translate(
-            calc(var(--col) * 100%),
-            calc(var(--row) * 100%)
-        );
+        transform: translate(calc(var(--col) * 100%), calc(var(--row) * 100%));
         transition: transform 0.3s ease;
     }
 
@@ -1585,7 +1617,7 @@
         &:disabled {
             opacity: 0.5;
             cursor: not-allowed;
-            
+
             &:hover {
                 background-color: var(--button-bg);
             }
@@ -1697,7 +1729,8 @@
             }
         }
 
-        .decline-draw, .cancel-draw {
+        .decline-draw,
+        .cancel-draw {
             background-color: var(--error);
 
             &:hover {
@@ -1717,16 +1750,10 @@
 
     @keyframes movePiece {
         0% {
-            transform: translate(
-                calc(var(--start-col) * 100%),
-                calc(var(--start-row) * 100%)
-            );
+            transform: translate(calc(var(--start-col) * 100%), calc(var(--start-row) * 100%));
         }
         100% {
-            transform: translate(
-                calc(var(--end-col) * 100%),
-                calc(var(--end-row) * 100%)
-            );
+            transform: translate(calc(var(--end-col) * 100%), calc(var(--end-row) * 100%));
         }
     }
 
@@ -1744,7 +1771,7 @@
 
     .toggle-last-move {
         background-color: var(--bg-secondary);
-        
+
         &:hover {
             filter: brightness(0.9);
         }
@@ -1754,7 +1781,7 @@
         @media (max-width: $breakpoint-md) {
             flex-direction: column;
             align-items: center;
-            
+
             .move-history {
                 width: 100%;
                 max-width: $board-size;
@@ -1791,7 +1818,8 @@
             max-width: min(100%, calc(100vh - 300px));
         }
 
-        .ghost-piece, .moving-piece {
+        .ghost-piece,
+        .moving-piece {
             font-size: clamp(1.5em, 4vw, 2em);
         }
     }
